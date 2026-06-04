@@ -136,28 +136,32 @@ describe("ZXP distribution scripts", () => {
     expect(source).not.toContain('require("zlib")');
   });
 
-  it("README makes signed ZXP the normal distribution path", () => {
+  it("README explains current distribution status and optional ZXP install path", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-    expect(readme).toContain("この拡張は署名済み ZXP 配布を前提とします");
+    expect(readme).toContain("現在、このリポジトリでは署名済み ZXP ファイルを配布していません");
+    expect(readme).toContain("利用する場合は、ソースコードからビルドしてください");
+    expect(readme).toContain("GitHub Releases などで署名済み ZXP が配布されている場合");
     expect(readme).toContain(`nyuukou-checker-v${VERSION}.zxp`);
     expect(readme).not.toContain("install-dev.command");
     expect(readme).not.toContain("PlayerDebugMode");
   });
 
-  it("README omits maintainer and developer distribution details", () => {
+  it("README documents source development, packaging, and support policy", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
     expect(readme).not.toContain("配布作成者・管理者向け情報");
-    expect(readme).not.toContain("正式配布では、コード署名用途の証明書または組織で管理する配布用証明書を使用してください");
-    expect(readme).not.toContain("GUI で案内する場合は ZXP Installer");
     expect(readme).toContain("https://aescripts.com/learn/zxp-installer/");
     expect(readme).toContain("ZXP Installer をまだ入れていない場合");
+    expect(readme).toContain("npm install");
+    expect(readme).toContain("npm run build");
+    expect(readme).toContain("npm test");
+    expect(readme).toContain("npm run package:zxp");
+    expect(readme).toContain("npm run cert:self");
+    expect(readme).toContain("自己署名証明書は開発・検証用です");
+    expect(readme).toContain("第三者配布用の署名証明書やパスワードは、このリポジトリに含めないでください");
+    expect(readme).toContain("Issue / Pull Request への対応や継続的な保守は保証しません");
     expect(readme).not.toContain("管理者や手順書で一括導入する場合は ExManCmd");
-    expect(readme).not.toContain("自己署名証明書は身内検証用です");
-    expect(readme).not.toContain("npm install");
-    expect(readme).not.toContain("npm run");
-    expect(readme).not.toContain("ZXP_CERT_PASSWORD");
   });
 });
 

@@ -17,15 +17,22 @@ This project is a personal project and is not affiliated with, endorsed by, or m
 | CEP バージョン | 11.0+ |
 | TAC 確認 | Adobe Acrobat Pro 推奨 |
 
+## Distribution
+
+現在、このリポジトリでは署名済み ZXP ファイルを配布していません。
+利用する場合は、ソースコードからビルドしてください。
+
+将来的に署名済み ZXP を配布する場合は、GitHub Releases に配置する想定です。
+
 ## インストール方法
 
-この拡張は署名済み ZXP 配布を前提とします。
+### ZXP ファイルが配布されている場合
 
-### 通常のインストール
+GitHub Releases などで署名済み ZXP が配布されている場合は、以下の手順でインストールします。
 
 1. Adobe Illustrator を完全終了します
 2. ZXP Installer を起動します
-3. `nyuukou-checker-v1.0.6.zxp` を ZXP Installer にドラッグ&ドロップします
+3. 配布されている `nyuukou-checker-v1.0.6.zxp` を ZXP Installer にドラッグ&ドロップします
 4. パスワード入力や許可を求められた場合は、macOS の画面表示に従って続行します
 5. インストール完了後、Adobe Illustrator を起動します
 6. **ウィンドウ → エクステンション → 入稿データチェッカー** を開きます
@@ -38,12 +45,6 @@ This project is a personal project and is not affiliated with, endorsed by, or m
 4. ZXP Installer を起動します
 5. 起動時に macOS の確認が出た場合は、右クリックから「開く」を選んで起動します
 6. ZXP Installer の画面へ `nyuukou-checker-v1.0.6.zxp` をドラッグ&ドロップします
-
-### 配布されるファイル
-
-```text
-nyuukou-checker-v1.0.6.zxp
-```
 
 ### アンインストール
 
@@ -138,6 +139,39 @@ ZXP Installer のアンインストール機能を使って削除してくださ
 - 未署名拡張が拒否されている
 - ZXP が正しくインストールされていない
 - Illustrator / CEP バージョンが対象外
+
+## Development
+
+```bash
+npm install
+npm run build
+npm test
+```
+
+利用可能な script は `package.json` を確認してください。
+
+## Packaging
+
+ZXP を作成するには、Adobe ZXPSignCmd と署名用証明書が必要です。
+
+```bash
+cp .env.example .env
+# .env に ZXPSIGNCMD_PATH / ZXP_CERT_PATH / ZXP_CERT_PASSWORD を設定
+npm run package:zxp
+```
+
+自己署名証明書は開発・検証用です。
+
+```bash
+npm run cert:self
+```
+
+第三者配布用の署名証明書やパスワードは、このリポジトリに含めないでください。
+
+## Support Policy
+
+このリポジトリは個人制作物です。
+Issue / Pull Request への対応や継続的な保守は保証しません。
 
 ## ライセンス
 
