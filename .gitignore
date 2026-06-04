@@ -1,0 +1,53 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+build/
+out/
+coverage/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+
+# local / private
+private/
+internal/
+notes/
+memo/
+draft/
+tmp/
+.local/
+screenshots/
+captures/
+test-data/
+real-data/
+assets/private/
+cert/
+certs/
+certs/*.p12
+*.p12
+*.zxp
+dist/*.zxp
+.planning/
+.claude/
+.codex/
+.code-review-graph/

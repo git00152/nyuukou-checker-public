@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>入稿データチェッカー</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      (function () {
+        var logFilePath = "";
+        var storageKey = "nyuukou-checker-startup-log";
+        function stringifyDetail(detail) {
+          if (!detail) return "";
+          try {
+            return " " + JSON.stringify(detail);
+          } catch (_e) {
+            return " " + String(detail);
+          }
+        }
+        function normalizePath(path) {
+          path = typeof path === "string" ? decodeURI(path) : "";
+          if (path.indexOf("file:///") === 0) return path.slice(7);
+          if (path.indexOf("file://") === 0) return path.slice(7);
+          return path;
+        }
+        function joinPath(base, name) {
+          if (!base) return name;
+          return base.replace(/[\/\\]+$/, "") + "/" + name;
+        }
+        function resolveLogFilePath() {
+          try {
+            if (
+              window.__adobe_cep__ &&
+              typeof window.__adobe_cep__.getSystemPath === "function"
+            ) {
+              var userData = normalizePath(window.__adobe_cep__.getSystemPath("userData"));
+              if (userData) return joinPath(joinPath(userData, "nyuukou-checker"), "nyuukou-checker.log");
+            }
+          } catch (_e) {
+            // fallback below
+          }
+          return "";
+        }
+        function writeFallback(line) {
+          try {
+            var previous = localStorage.getItem(storageKey) || "";
+            var next = (previous + line + "\n").split("\n").slice(-80).join("\n");
+            localStorage.setItem(storageKey, next);
+          } catch (_e) {
+            // 起動診断ログの失敗でパネル表示を止めない
+          }
+        }
+        function writeLine(line) {
+          try {
+            if (
+              logFilePath &&
+              window.cep &&
+              window.cep.fs &&
+              typeof window.cep.fs.writeFile === "function"
+            ) {
+              var current = "";
+              if (typeof window.cep.fs.readFile === "function") {
+                var readResult = window.cep.fs.readFile(logFilePath);
+                if (readResult && readResult.err === 0 && typeof readResult.data === "string") {
+                  current = readResult.data;
+                }
+              }
+              var dir = logFilePath.replace(/[\/\\][^\/\\]+$/, "");
+              if (typeof window.cep.fs.makedir === "function") {
+                window.cep.fs.makedir(dir);
+              }
+              var writeResult = window.cep.fs.writeFile(logFilePath, current + line + "\n");
+              if (!writeResult || writeResult.err === 0) return;
+            }
+          } catch (_e) {
+            // 起動診断ログの失敗でパネル表示を止めない
+          }
+          writeFallback(line);
+        }
+        window.__nyuukouLog = function (event, detail) {
+          writeLine("[" + new Date().toISOString() + "] " + event + stringifyDetail(detail));
+        };
+        logFilePath = resolveLogFilePath();
+        window.__nyuukouLog("startup html loaded", {
+          userAgent: navigator.userAgent,
+          hasCep: typeof window.cep !== "undefined",
+          hasCepFs: !!(window.cep && window.cep.fs),
+          logFilePath: logFilePath
+        });
+        window.addEventListener("error", function (event) {
+          window.__nyuukouLog("window error", {
+            message: event.message,
+            source: event.filename,
+            line: event.lineno,
+            column: event.colno,
+            error: event.error && event.error.stack ? event.error.stack : String(event.error || "")
+          });
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          window.__nyuukouLog("window unhandledrejection", {
+            reason: reason && reason.stack ? reason.stack : String(reason || "")
+          });
+        });
+      })();
+    </script>
+    <script type="module" src="./index-react.tsx"></script>
+  </body>
+</html>
