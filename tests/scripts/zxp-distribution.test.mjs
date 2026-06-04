@@ -139,21 +139,25 @@ describe("ZXP distribution scripts", () => {
   it("README makes signed ZXP the normal distribution path", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-    expect(readme).toContain("v1.0.1 以降、この拡張は署名済み ZXP 配布を前提とします");
-    expect(readme).toContain(`dist/nyuukou-checker-v${VERSION}.zxp`);
-    expect(readme).toContain("install-dev.command");
-    expect(readme).toContain("PlayerDebugMode は開発用・緊急回避用");
+    expect(readme).toContain("この拡張は署名済み ZXP 配布を前提とします");
+    expect(readme).toContain(`nyuukou-checker-v${VERSION}.zxp`);
+    expect(readme).not.toContain("install-dev.command");
+    expect(readme).not.toContain("PlayerDebugMode");
   });
 
-  it("README documents certificate and installer choices for distribution", () => {
+  it("README omits maintainer and developer distribution details", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-    expect(readme).toContain("正式配布では、コード署名用途の証明書または組織で管理する配布用証明書を使用してください");
-    expect(readme).toContain("GUI で案内する場合は ZXP Installer");
+    expect(readme).not.toContain("配布作成者・管理者向け情報");
+    expect(readme).not.toContain("正式配布では、コード署名用途の証明書または組織で管理する配布用証明書を使用してください");
+    expect(readme).not.toContain("GUI で案内する場合は ZXP Installer");
     expect(readme).toContain("https://aescripts.com/learn/zxp-installer/");
     expect(readme).toContain("ZXP Installer をまだ入れていない場合");
-    expect(readme).toContain("管理者や手順書で一括導入する場合は ExManCmd");
-    expect(readme).toContain("自己署名証明書は身内検証用です");
+    expect(readme).not.toContain("管理者や手順書で一括導入する場合は ExManCmd");
+    expect(readme).not.toContain("自己署名証明書は身内検証用です");
+    expect(readme).not.toContain("npm install");
+    expect(readme).not.toContain("npm run");
+    expect(readme).not.toContain("ZXP_CERT_PASSWORD");
   });
 });
 

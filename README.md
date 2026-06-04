@@ -19,8 +19,7 @@ This project is a personal project and is not affiliated with, endorsed by, or m
 
 ## インストール方法
 
-v1.0.1 以降、この拡張は署名済み ZXP 配布を前提とします。
-未署名の `extension/` フォルダを直接コピーする方式は、開発用または緊急回避用です。
+この拡張は署名済み ZXP 配布を前提とします。
 
 ### 通常のインストール
 
@@ -40,9 +39,6 @@ v1.0.1 以降、この拡張は署名済み ZXP 配布を前提とします。
 5. 起動時に macOS の確認が出た場合は、右クリックから「開く」を選んで起動します
 6. ZXP Installer の画面へ `nyuukou-checker-v1.0.6.zxp` をドラッグ&ドロップします
 
-配布先へ GUI で案内する場合は ZXP Installer を使います。
-管理者や手順書で一括導入する場合は ExManCmd など、組織で採用する ZXP 導入手段を使います。
-
 ### 配布されるファイル
 
 ```text
@@ -57,11 +53,6 @@ ZXP Installer のアンインストール機能を使って削除してくださ
 ```text
 ~/Library/Application Support/Adobe/CEP/extensions/com.git00152.nyuukochecker
 ```
-
-### 開発用インストール
-
-`install-dev.command` による直接コピー方式は、開発用・緊急回避用です。
-通常配布では使用しないでください。未署名 CEP 拡張の読み込みには配布先環境の設定が影響します。
 
 ## 使い方
 
@@ -127,92 +118,6 @@ ZXP Installer のアンインストール機能を使って削除してくださ
 | 塗り足し | 塗り足し不足（3mm 未到達） | WARNING |
 | 塗り足し | セーフゾーン違反 | WARNING |
 
-## 配布作成者・管理者向け情報
-
-### 配布方針
-
-通常配布では、署名済み ZXP のみを配布します。
-正式配布では、コード署名用途の証明書または組織で管理する配布用証明書を使用してください。
-自己署名証明書は身内検証用です。
-
-配布先への案内は、対象者に応じて分けます。
-
-- GUI で案内する場合は ZXP Installer を使います
-- 管理者や手順書で一括導入する場合は ExManCmd など、組織で採用するコマンドライン導入手段を使います
-- どちらの場合も Illustrator を完全終了してからインストールし、インストール後に Illustrator を起動します
-- インストール後は **ウィンドウ → エクステンション → 入稿データチェッカー** を開きます
-
-### 配布版ビルド
-
-```bash
-SKIP_DOTENV=true npm run build
-npm run verify:cep
-```
-
-### 正式証明書で ZXP を生成
-
-`.env` は使用せず、必要なビルド時シークレットは環境変数として注入してください。
-証明書とパスワードはリポジトリに含めないでください。
-
-```bash
-export ZXPSIGNCMD_PATH="/path/to/ZXPSignCmd"
-export ZXP_CERT_PATH="/path/to/distribution-certificate.p12"
-export ZXP_CERT_PASSWORD="証明書のパスワード"
-npm run package:zxp
-```
-
-出力先:
-
-```text
-dist/nyuukou-checker-v1.0.6.zxp
-```
-
-### 自己署名証明書で検証する場合
-
-自己署名証明書は身内検証用です。
-正式配布では、自己署名証明書ではなく配布用証明書の `.p12` を指定してください。
-
-証明書を作成します。
-
-```bash
-export ZXPSIGNCMD_PATH="/path/to/ZXPSignCmd"
-export ZXP_CERT_PASSWORD="任意の強いパスワード"
-npm run cert:self
-```
-
-作成した証明書で ZXP を生成します。
-
-```bash
-export ZXPSIGNCMD_PATH="/path/to/ZXPSignCmd"
-export ZXP_CERT_PATH="certs/self-signed.p12"
-export ZXP_CERT_PASSWORD="証明書のパスワード"
-npm run package:zxp
-```
-
-### 開発環境セットアップ
-
-```bash
-npm install
-```
-
-### 開発サーバー起動
-
-```bash
-npm run dev
-```
-
-### 開発用 installer zip
-
-直接コピー型の installer は通常配布ではなく、開発用・緊急回避用です。
-
-```bash
-SKIP_DOTENV=true npm run build
-npm run installer
-```
-
-出力される `install-dev.command` は未署名拡張を CEP extensions 配下へ直接コピーします。
-PlayerDebugMode は開発用・緊急回避用として扱い、通常配布手順には含めません。
-
 ### トラブルシュート
 
 #### メニューに表示されない
@@ -233,12 +138,6 @@ PlayerDebugMode は開発用・緊急回避用として扱い、通常配布手�
 - 未署名拡張が拒否されている
 - ZXP が正しくインストールされていない
 - Illustrator / CEP バージョンが対象外
-
-### テスト実行
-
-```bash
-npm test
-```
 
 ## ライセンス
 
