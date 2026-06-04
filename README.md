@@ -19,16 +19,17 @@ This project is a personal project and is not affiliated with, endorsed by, or m
 
 ## Distribution
 
-現在、このリポジトリでは署名済み ZXP ファイルを配布していません。
-利用する場合は、ソースコードからビルドしてください。
+v1.0.6 では、GitHub Releases で署名済み ZXP ファイルを配布しています。
 
-将来的に署名済み ZXP を配布する場合は、GitHub Releases に配置する想定です。
+- Release: <https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.6>
+- File: `nyuukou-checker-v1.0.6.zxp`
+- SHA-256: `719a135933afe5cdb660e58aa374ee0821b510b170e699f1cd9eb26d7ddbab09`
 
 ## インストール方法
 
-### ZXP ファイルが配布されている場合
+### ZXP ファイルをインストールする
 
-GitHub Releases などで署名済み ZXP が配布されている場合は、以下の手順でインストールします。
+GitHub Releases から `nyuukou-checker-v1.0.6.zxp` をダウンロードし、以下の手順でインストールします。
 
 1. Adobe Illustrator を完全終了します
 2. ZXP Installer を起動します

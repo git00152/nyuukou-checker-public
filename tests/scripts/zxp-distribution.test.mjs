@@ -136,13 +136,13 @@ describe("ZXP distribution scripts", () => {
     expect(source).not.toContain('require("zlib")');
   });
 
-  it("README explains current distribution status and optional ZXP install path", () => {
+  it("README documents the signed ZXP release asset", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-    expect(readme).toContain("現在、このリポジトリでは署名済み ZXP ファイルを配布していません");
-    expect(readme).toContain("利用する場合は、ソースコードからビルドしてください");
-    expect(readme).toContain("GitHub Releases などで署名済み ZXP が配布されている場合");
+    expect(readme).toContain("v1.0.6 では、GitHub Releases で署名済み ZXP ファイルを配布しています");
+    expect(readme).toContain("https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.6");
     expect(readme).toContain(`nyuukou-checker-v${VERSION}.zxp`);
+    expect(readme).toContain("719a135933afe5cdb660e58aa374ee0821b510b170e699f1cd9eb26d7ddbab09");
     expect(readme).not.toContain("install-dev.command");
     expect(readme).not.toContain("PlayerDebugMode");
   });
