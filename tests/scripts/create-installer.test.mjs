@@ -43,6 +43,15 @@ describe.skipIf(!hasCep)("create-installer.mjs", () => {
     expect(content).toContain("このインストーラーは開発用です");
   });
 
+  it("既存の開発用拡張は、明示確認後にバックアップして置換する", () => {
+    const content = fs.readFileSync(path.join(INSTALLER_DIR, "install-dev.command"), "utf8");
+
+    expect(content).toContain("read -r -p");
+    expect(content).toContain("BACKUP_DIR");
+    expect(content).toContain('mv "$INSTALL_DIR" "$BACKUP_DIR"');
+    expect(content).not.toContain('rm -rf "$INSTALL_DIR"');
+  });
+
   it("extension ディレクトリが存在する", () => {
     expect(fs.existsSync(path.join(INSTALLER_DIR, "extension"))).toBe(true);
   });
@@ -66,6 +75,14 @@ describe.skipIf(!hasCep)("create-installer.mjs", () => {
 
     expect(readme).toContain("ウィンドウ → エクステンション → 入稿データチェッカー");
     expect(readme).not.toContain("ウィンドウ → 機能拡張 → 入稿データチェッカー");
+  });
+
+  it("README.txt は macOS の保護機能を回避する手順を案内しない", () => {
+    const readme = fs.readFileSync(path.join(INSTALLER_DIR, "README.txt"), "utf8");
+
+    expect(readme).toContain("macOS のセキュリティ機能を無効化しないでください");
+    expect(readme).not.toContain("とにかく開く");
+    expect(readme).not.toContain("右クリック");
   });
 
   it("配布用 zip が生成される", () => {

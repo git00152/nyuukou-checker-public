@@ -139,10 +139,12 @@ describe("ZXP distribution scripts", () => {
   it("README documents the signed ZXP release asset", () => {
     const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-    expect(readme).toContain("v1.0.6 では、GitHub Releases で署名済み ZXP ファイルを配布しています");
+    expect(readme).toContain("v1.0.6 の署名済み ZXP は、このリポジトリの GitHub Releases だけで配布します");
     expect(readme).toContain("https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.6");
     expect(readme).toContain(`nyuukou-checker-v${VERSION}.zxp`);
     expect(readme).toContain("719a135933afe5cdb660e58aa374ee0821b510b170e699f1cd9eb26d7ddbab09");
+    expect(readme).toContain("shasum -a 256 nyuukou-checker-v1.0.6.zxp");
+    expect(readme).toContain("リリースページ以外から入手したファイルは実行・インストールしないでください");
     expect(readme).not.toContain("install-dev.command");
     expect(readme).not.toContain("PlayerDebugMode");
   });
@@ -159,8 +161,10 @@ describe("ZXP distribution scripts", () => {
     expect(readme).toContain("npm run package:zxp");
     expect(readme).toContain("npm run cert:self");
     expect(readme).toContain("自己署名証明書は開発・検証用です");
-    expect(readme).toContain("第三者配布用の署名証明書やパスワードは、このリポジトリに含めないでください");
+    expect(readme).toContain("第三者配布用の署名証明書・パスワード・生成済み ZXP は、このリポジトリに含めないでください");
     expect(readme).toContain("Issue / Pull Request への対応や継続的な保守は保証しません");
+    expect(readme).toContain("macOS のセキュリティ警告が表示され");
+    expect(readme).not.toContain("とにかく開く");
     expect(readme).not.toContain("管理者や手順書で一括導入する場合は ExManCmd");
   });
 });

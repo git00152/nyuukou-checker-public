@@ -38,6 +38,9 @@ EXT_SOURCE="$SCRIPT_DIR/extension"
 EXT_ID="${EXT_ID}"
 INSTALL_BASE="$HOME/Library/Application Support/Adobe/CEP/extensions"
 INSTALL_DIR="$INSTALL_BASE/$EXT_ID"
+STAGING_DIR="$INSTALL_BASE/.$EXT_ID.new-$$"
+BACKUP_DIR=""
+BACKUP_CREATED=0
 
 echo "=========================================="
 echo " 入稿データチェッカー v${VERSION} 開発用インストーラー"
@@ -51,30 +54,73 @@ if [ ! -d "$EXT_SOURCE" ]; then
   echo "✗ extension フォルダが見つかりません。"
   echo "  zip を解凍した後、フォルダごと移動せずに実行してください。"
   echo ""
-  read -p "Enterキーで終了..."
+  read -r -p "Enterキーで終了..."
+  exit 1
+fi
+
+if [ -e "$STAGING_DIR" ]; then
+  echo "✗ 前回の一時ディレクトリが残っています: $STAGING_DIR"
+  echo "  内容を確認してから手動で削除し、再度実行してください。"
+  echo ""
+  read -r -p "Enterキーで終了..."
   exit 1
 fi
 
 if [ -d "$INSTALL_DIR" ]; then
-  echo "既にインストールされています。更新します..."
-else
-  echo "インストールを開始します..."
+  echo "既存の開発用拡張をバックアップして置き換えます。"
+  read -r -p "続行しますか？ [y/N] " reply
+  if [ "$reply" != "y" ] && [ "$reply" != "Y" ]; then
+    echo "中止しました。"
+    exit 0
+  fi
 fi
 
 mkdir -p "$INSTALL_BASE"
 
-if rm -rf "$INSTALL_DIR" && ditto "$EXT_SOURCE" "$INSTALL_DIR"; then
+if ! ditto "$EXT_SOURCE" "$STAGING_DIR"; then
+  echo ""
+  echo "✗ 新しい拡張ファイルの準備に失敗しました。既存の拡張は変更していません。"
+  echo ""
+  read -r -p "Enterキーで終了..."
+  exit 1
+fi
+
+if [ -d "$INSTALL_DIR" ]; then
+  BACKUP_DIR="$INSTALL_DIR.backup-$(date +%Y%m%d%H%M%S)"
+  if ! mv "$INSTALL_DIR" "$BACKUP_DIR"; then
+    echo ""
+    echo "✗ 既存の拡張をバックアップできませんでした。既存の拡張は変更していません。"
+    echo "  準備済みファイル: $STAGING_DIR"
+    echo ""
+    read -r -p "Enterキーで終了..."
+    exit 1
+  fi
+  BACKUP_CREATED=1
+  echo "✓ 既存の拡張をバックアップしました: $BACKUP_DIR"
+fi
+
+if mv "$STAGING_DIR" "$INSTALL_DIR"; then
   echo ""
   echo "✓ 開発用インストールが完了しました。"
+  if [ "$BACKUP_CREATED" = "1" ]; then
+    echo "  以前の拡張は次の場所に保管されています: $BACKUP_DIR"
+  fi
   echo ""
   echo "Illustrator を再起動してパネルを有効にしてください。"
 else
   echo ""
-  echo "✗ インストール中にエラーが発生しました。"
+  echo "✗ 新しい拡張を配置できませんでした。"
+  if [ "$BACKUP_CREATED" = "1" ]; then
+    if mv "$BACKUP_DIR" "$INSTALL_DIR"; then
+      echo "✓ 以前の拡張を復元しました。"
+    else
+      echo "✗ 自動復元に失敗しました。バックアップ: $BACKUP_DIR"
+    fi
+  fi
 fi
 
 echo ""
-read -p "Enterキーで終了..."
+read -r -p "Enterキーで終了..."
 `;
 
   const commandPath = path.join(INSTALLER_DIR, COMMAND_NAME);
@@ -113,14 +159,19 @@ function writeReadme() {
 
 バージョン: v${VERSION}
 
-この zip は開発用・緊急回避用です。
-通常配布では署名済み ZXP を使用してください。
+この zip は開発・検証用途に限ります。
+通常の利用・配布では、GitHub Releases の署名済み ZXP を使用してください。
 
 【インストール手順】
 1. この zip を解凍する（既に解凍済みならスキップ）
-2. 「install-dev.command」をダブルクリックする
-3. ターミナルが開き、インストールが完了する
-4. Illustrator を再起動してパネルを有効にする
+2. 配布元とファイル内容を確認する
+3. 「install-dev.command」を実行する
+4. 既存の開発用拡張がある場合は、確認に応じてバックアップを作成する
+5. Illustrator を再起動してパネルを有効にする
+
+【macOS のセキュリティ警告が出た場合】
+macOS のセキュリティ機能を無効化しないでください。
+配布元とファイルの正当性を確認できない場合は実行を中止し、通常配布の署名済み ZXP を使用してください。
 
 【通常配布】
 署名済み ZXP:
@@ -130,17 +181,14 @@ function writeReadme() {
 Illustrator メニュー:
   ウィンドウ → エクステンション → 入稿データチェッカー
 
-【初回起動時の注意 (macOS Gatekeeper)】
-「開発元を確認できません」と表示された場合:
-  ① install.command を右クリック →「開く」を選択
-  ② 「開く」をクリックして確認
-
-それでも開けない場合:
-  システム設定 → プライバシーとセキュリティ →「とにかく開く」
-
 【アンインストール】
 以下のフォルダを削除してください:
   ~/Library/Application Support/Adobe/CEP/extensions/${EXT_ID}
+
+【バックアップの扱い】
+既存の開発用拡張は、更新前に次の形式で同じフォルダ内へ退避します:
+  ${EXT_ID}.backup-YYYYMMDDHHMMSS
+動作確認後、不要なバックアップは内容を確認したうえで手動で削除してください。
 `;
   fs.writeFileSync(path.join(INSTALLER_DIR, "README.txt"), readme, "utf8");
 }
