@@ -3,8 +3,11 @@
 Adobe Illustrator 用の入稿データ品質チェック CEP パネル。
 テキストアウトライン忘れ・解像度不足・塗り足し不足などを自動検出し、プレビュー上のオーバーレイと検出結果リストで確認できます。
 
-このリポジトリは個人制作物です。所属組織とは関係なく、所属組織による承認・保守・保証を意味しません。
-This project is a personal project and is not affiliated with, endorsed by, or maintained by my employer.
+> [!IMPORTANT]
+> これは個人制作の非公式な拡張機能です。Adobe、その関係会社、または所属組織による承認・保守・保証を意味しません。
+
+This project is an independent personal project. It is not affiliated with, endorsed by, or maintained by Adobe, its affiliates, or my employer.
+Adobe and Illustrator are either registered trademarks or trademarks of Adobe in the United States and/or other countries.
 
 現在のバージョン: v1.0.6
 
@@ -17,13 +20,23 @@ This project is a personal project and is not affiliated with, endorsed by, or m
 | CEP バージョン | 11.0+ |
 | TAC 確認 | Adobe Acrobat Pro 推奨 |
 
-## Distribution
+## 配布と検証
 
-v1.0.6 では、GitHub Releases で署名済み ZXP ファイルを配布しています。
+v1.0.6 の署名済み ZXP は、このリポジトリの GitHub Releases だけで配布します。
 
 - Release: <https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.6>
 - File: `nyuukou-checker-v1.0.6.zxp`
 - SHA-256: `719a135933afe5cdb660e58aa374ee0821b510b170e699f1cd9eb26d7ddbab09`
+
+ダウンロード後、リリースに記載した値と一致することを確認してください。
+
+```bash
+shasum -a 256 nyuukou-checker-v1.0.6.zxp
+```
+
+ハッシュ値は、ダウンロードしたファイルがリリース掲載のファイルと一致することを確認するためのものです。リリースページ以外から入手したファイルは実行・インストールしないでください。
+
+現行ソースには、外部へのテレメトリー送信、拡張機能自身による自動更新・自動ダウンロード・自動インストールの機能はありません。Illustrator ファイルや一時プレビュー／PDF は、ユーザーが操作したときにローカルで扱います。
 
 ## インストール方法
 
@@ -40,12 +53,13 @@ GitHub Releases から `nyuukou-checker-v1.0.6.zxp` をダウンロードし、�
 
 ### ZXP Installer をまだ入れていない場合
 
-1. ブラウザで <https://aescripts.com/learn/zxp-installer/> を開きます
-2. macOS 版の ZXP Installer をダウンロードします
-3. ダウンロードした `.dmg` を開き、ZXP Installer を Applications フォルダへ入れます
-4. ZXP Installer を起動します
-5. 起動時に macOS の確認が出た場合は、右クリックから「開く」を選んで起動します
-6. ZXP Installer の画面へ `nyuukou-checker-v1.0.6.zxp` をドラッグ&ドロップします
+ZXP Installer は第三者が提供するアプリケーションであり、本プロジェクトには同梱されません。入手・インストールは提供元の公式案内に従ってください。
+
+1. <https://aescripts.com/learn/zxp-installer/> を開き、提供元を確認します
+2. macOS 版の ZXP Installer を取得・インストールします
+3. ZXP Installer の画面へ `nyuukou-checker-v1.0.6.zxp` をドラッグ&ドロップします
+
+macOS のセキュリティ警告が表示され、提供元やファイルの正当性を確認できない場合は、保護機能を無効化せずにインストールを中止してください。
 
 ### アンインストール
 
@@ -155,9 +169,9 @@ npm test
 
 ZXP を作成するには、Adobe ZXPSignCmd と署名用証明書が必要です。
 
+`ZXPSIGNCMD_PATH`、`ZXP_CERT_PATH`、`ZXP_CERT_PASSWORD` は、シークレット管理手段から環境変数として渡してから実行してください。
+
 ```bash
-cp .env.example .env
-# .env に ZXPSIGNCMD_PATH / ZXP_CERT_PATH / ZXP_CERT_PASSWORD を設定
 npm run package:zxp
 ```
 
@@ -167,7 +181,7 @@ npm run package:zxp
 npm run cert:self
 ```
 
-第三者配布用の署名証明書やパスワードは、このリポジトリに含めないでください。
+第三者配布用の署名証明書・パスワード・生成済み ZXP は、このリポジトリに含めないでください。
 
 ## Support Policy
 
