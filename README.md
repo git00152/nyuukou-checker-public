@@ -9,7 +9,7 @@ Adobe Illustrator 用の入稿データ品質チェック CEP パネル。
 This project is an independent personal project. It is not affiliated with, endorsed by, or maintained by Adobe, its affiliates, or my employer.
 Adobe and Illustrator are either registered trademarks or trademarks of Adobe in the United States and/or other countries.
 
-現在のバージョン: v1.0.6
+現在のバージョン: v1.0.7
 
 ## 動作環境
 
@@ -22,16 +22,16 @@ Adobe and Illustrator are either registered trademarks or trademarks of Adobe in
 
 ## 配布と検証
 
-v1.0.6 の署名済み ZXP は、このリポジトリの GitHub Releases だけで配布します。
+v1.0.7 の署名済み ZXP は、このリポジトリの GitHub Releases だけで配布します。
 
-- Release: <https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.6>
-- File: `nyuukou-checker-v1.0.6.zxp`
-- SHA-256: `719a135933afe5cdb660e58aa374ee0821b510b170e699f1cd9eb26d7ddbab09`
+- Release: <https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.7>
+- File: `nyuukou-checker-v1.0.7.zxp`
+- SHA-256: リリース作成後にこの値を配布ファイルから確定します
 
 ダウンロード後、リリースに記載した値と一致することを確認してください。
 
 ```bash
-shasum -a 256 nyuukou-checker-v1.0.6.zxp
+shasum -a 256 nyuukou-checker-v1.0.7.zxp
 ```
 
 ハッシュ値は、ダウンロードしたファイルがリリース掲載のファイルと一致することを確認するためのものです。リリースページ以外から入手したファイルは実行・インストールしないでください。
@@ -42,11 +42,11 @@ shasum -a 256 nyuukou-checker-v1.0.6.zxp
 
 ### ZXP ファイルをインストールする
 
-GitHub Releases から `nyuukou-checker-v1.0.6.zxp` をダウンロードし、以下の手順でインストールします。
+GitHub Releases から `nyuukou-checker-v1.0.7.zxp` をダウンロードし、以下の手順でインストールします。
 
 1. Adobe Illustrator を完全終了します
 2. ZXP Installer を起動します
-3. 配布されている `nyuukou-checker-v1.0.6.zxp` を ZXP Installer にドラッグ&ドロップします
+3. 配布されている `nyuukou-checker-v1.0.7.zxp` を ZXP Installer にドラッグ&ドロップします
 4. パスワード入力や許可を求められた場合は、macOS の画面表示に従って続行します
 5. インストール完了後、Adobe Illustrator を起動します
 6. **ウィンドウ → エクステンション → 入稿データチェッカー** を開きます
@@ -57,7 +57,7 @@ ZXP Installer は第三者が提供するアプリケーションであり、本
 
 1. <https://aescripts.com/learn/zxp-installer/> を開き、提供元を確認します
 2. macOS 版の ZXP Installer を取得・インストールします
-3. ZXP Installer の画面へ `nyuukou-checker-v1.0.6.zxp` をドラッグ&ドロップします
+3. ZXP Installer の画面へ `nyuukou-checker-v1.0.7.zxp` をドラッグ&ドロップします
 
 macOS のセキュリティ警告が表示され、提供元やファイルの正当性を確認できない場合は、保護機能を無効化せずにインストールを中止してください。
 
@@ -164,24 +164,6 @@ npm test
 ```
 
 利用可能な script は `package.json` を確認してください。
-
-## Packaging
-
-ZXP を作成するには、Adobe ZXPSignCmd と署名用証明書が必要です。
-
-`ZXPSIGNCMD_PATH`、`ZXP_CERT_PATH`、`ZXP_CERT_PASSWORD` は、シークレット管理手段から環境変数として渡してから実行してください。
-
-```bash
-npm run package:zxp
-```
-
-自己署名証明書は開発・検証用です。
-
-```bash
-npm run cert:self
-```
-
-第三者配布用の署名証明書・パスワード・生成済み ZXP は、このリポジトリに含めないでください。
 
 ## Support Policy
 

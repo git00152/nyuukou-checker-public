@@ -1,7 +1,7 @@
 import { CEP_Config } from "vite-cep-plugin";
 
 const config: CEP_Config = {
-  version: "1.0.6",
+  version: "1.0.7",
   id: "com.git00152.nyuukochecker",
   displayName: "入稿データチェッカー",
   symlink: "local",

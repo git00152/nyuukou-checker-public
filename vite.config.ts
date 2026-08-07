@@ -1,19 +1,9 @@
-import { config as loadDotenv } from "dotenv";
-if (process.env.SKIP_DOTENV !== "true") {
-  loadDotenv(); // Node.js build context only — does not inject process into client bundle
-}
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { cep, CepOptions, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
 
-// Override ZXP signing credentials from environment variables (build-time only)
-if (process.env.ZXP_CERT_PASSWORD) cepConfig.zxp.password = process.env.ZXP_CERT_PASSWORD;
-if (process.env.ZXP_PASSWORD) cepConfig.zxp.password = process.env.ZXP_PASSWORD;
-if (process.env.ZXP_COUNTRY) cepConfig.zxp.country = process.env.ZXP_COUNTRY;
-if (process.env.ZXP_PROVINCE) cepConfig.zxp.province = process.env.ZXP_PROVINCE;
-if (process.env.ZXP_ORG) cepConfig.zxp.org = process.env.ZXP_ORG;
 import { extendscriptConfig } from "./vite.es.config";
 
 const extensions = [".js", ".ts", ".tsx"];

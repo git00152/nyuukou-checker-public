@@ -1,19 +1,13 @@
 {
   "name": "nyuuko-data-checker",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "rimraf dist/* && tsc -p \"tsconfig-build.json\" && vite build --watch false",
-    "zxp": "rimraf dist/* && tsc -p \"tsconfig-build.json\" && cross-env ZXP_PACKAGE=true vite build --watch false",
-    "zip": "rimraf dist/* && tsc -p \"tsconfig-build.json\" && cross-env ZIP_PACKAGE=true vite build --watch false",
     "symlink": "cross-env BOLT_ACTION=symlink vite",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "installer": "node scripts/create-installer.mjs",
-    "verify:cep": "bash scripts/verify-extension.sh",
-    "cert:self": "bash scripts/create-self-signed-cert.sh",
-    "package:zxp": "bash scripts/package-zxp.sh"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -43,7 +37,6 @@
     "@vitejs/plugin-react": "^4.5.1",
     "@vitest/coverage-v8": "^4.1.1",
     "cross-env": "^7.0.3",
-    "dotenv": "^17.3.1",
     "fs-extra": "^10.0.0",
     "jsdom": "^26.1.0",
     "rimraf": "^3.0.2",

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.7 - 2026-08-07
+
+- Unified the latest local feature implementation with the public-release security hardening.
+- Removed maintainer-only signing, certificate, installer, and environment-template tooling from the public source tree.
+- Added release-source, SHA-256 verification, and third-party-installer safety guidance.
+- Added `SECURITY.md`.
+- Updated the dependency lockfile for the release build.
+
 ## v1.0.6 - 2026-06-04
 
 - Extended direct Illustrator selection to path, text, placed image, and raster image detection results with target references.

@@ -10,7 +10,6 @@ coverage/
 # env / secrets
 .env
 .env.*
-!.env.example
 
 # logs
 logs/
