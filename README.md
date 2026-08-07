@@ -26,7 +26,9 @@ v1.0.7 の署名済み ZXP は、このリポジトリの GitHub Releases だけ
 
 - Release: <https://github.com/git00152/nyuukou-checker-public/releases/tag/v1.0.7>
 - File: `nyuukou-checker-v1.0.7.zxp`
-- SHA-256: リリース作成後にこの値を配布ファイルから確定します
+- SHA-256: `4c32839f5d6cb033c28a35c3a9e39de9675b3f20ec3f1ac6ddc513cf518e82e8`
+
+このリリースの ZXP は自己署名証明書で署名しています。認証局発行の証明書による信頼済み署名ではないため、環境によって警告が表示される場合があります。
 
 ダウンロード後、リリースに記載した値と一致することを確認してください。
 

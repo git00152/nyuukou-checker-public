@@ -41,7 +41,7 @@ describe("public release security boundary", () => {
     const security = fs.readFileSync(path.join(root, "SECURITY.md"), "utf8");
 
     expect(readme).toContain("GitHub Releases");
-    expect(readme).toContain("SHA-256");
+    expect(readme).toMatch(/SHA-256:\s*`[a-f0-9]{64}`/);
     expect(security).toContain("SHA-256");
     expect(security).toContain("第三者");
   });
