@@ -1,6 +1,5 @@
-import React, { useState } from "react";
-import type { AppSettings } from "../settings";
-import { colors, radii, spacing } from "../styles/tokens";
+import React from "react";
+import type { AppSettings, BooleanSettingKey } from "../settings";
 import { PanelButton } from "./PanelButton";
 
 export interface SettingsPanelProps {
@@ -11,18 +10,32 @@ export interface SettingsPanelProps {
   onCleanupAcrobatPdf: () => void;
 }
 
-type SettingKey = keyof AppSettings;
+type SectionId = "criteria" | "targets" | "behavior";
 
-const settingRows: Array<{ key: SettingKey; label: string; section: "check" | "display" }> = [
-  { key: "largePrintMode", label: "大判印刷モード", section: "check" },
-  { key: "detectOpenPaths", label: "オープンパスを検出する", section: "check" },
-  { key: "detectFilledOpenPaths", label: "オープンパスの塗り設定を検出する", section: "check" },
-  { key: "includeGuides", label: "ガイドを検出対象に含める", section: "check" },
-  { key: "includeTrimMarkLayers", label: "トンボレイヤーを検出対象に含める", section: "check" },
-  { key: "autoPanToSelection", label: "検出結果選択時にプレビューを自動移動", section: "display" },
-  { key: "confirmBeforeDelete", label: "削除前に確認ダイアログを表示", section: "display" },
+const settingRows: Array<{ key: BooleanSettingKey; label: string; section: SectionId; help?: string }> = [
+  {
+    key: "largePrintMode",
+    label: "大判印刷モード",
+    section: "criteria",
+    help: "画像は200dpi以上を許容し、塗り足しの既定値による判定は参考扱いにします。",
+  },
+  { key: "detectOpenPaths", label: "オープンパス", section: "targets" },
+  { key: "detectFilledOpenPaths", label: "塗りのあるオープンパス", section: "targets" },
+  { key: "includeTrimMarkLayers", label: "トンボのレイヤー", section: "targets" },
+  { key: "autoPanToSelection", label: "選択した結果へプレビューを移動", section: "behavior" },
+  { key: "confirmBeforeDelete", label: "削除前に確認する", section: "behavior" },
 ];
 
+const sections: Array<{ id: SectionId; title: string; affectsResults: boolean }> = [
+  { id: "criteria", title: "入稿条件", affectsResults: true },
+  { id: "targets", title: "検出対象", affectsResults: true },
+  { id: "behavior", title: "操作", affectsResults: false },
+];
+
+/**
+ * 設定ビュー。結果リストの位置に入れ替わって表示する。
+ * 判定に効く設定（入稿条件・検出対象）には「次のチェックから反映」と明記する。
+ */
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   settings,
   onChangeSettings,
@@ -30,94 +43,54 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onOpenAcrobatTacCheck,
   onCleanupAcrobatPdf,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const setValue = (key: SettingKey, checked: boolean) => {
+  const setValue = (key: BooleanSettingKey, checked: boolean) => {
     onChangeSettings({ ...settings, [key]: checked });
   };
 
-  const renderRows = (section: "check" | "display") => (
-    <div style={{ display: "grid", gap: spacing.sm }}>
-      {settingRows.filter((row) => row.section === section).map((row) => (
-        <label
-          key={row.key}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: spacing.sm,
-            cursor: disabled ? "not-allowed" : "pointer",
-            fontSize: "12px",
-            color: disabled ? colors.textSubtle : colors.textMuted,
-            lineHeight: 1.4,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={settings[row.key]}
-            disabled={disabled}
-            onChange={(event) => setValue(row.key, event.target.checked)}
-            style={{ cursor: disabled ? "not-allowed" : "pointer", accentColor: colors.primary }}
-          />
-          <span>{row.label}</span>
-        </label>
-      ))}
-    </div>
-  );
-
   return (
-    <div style={{ display: "grid", gap: spacing.md }}>
-      <PanelButton
-        type="button"
-        variant="secondary"
-        fullWidth
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((prev) => !prev)}
-      >
-        設定
-      </PanelButton>
-
-      {isOpen && (
-        <div
-          style={{
-            display: "grid",
-            gap: spacing.lg,
-            padding: "10px",
-            border: `1px solid ${colors.panelBorder}`,
-            borderRadius: radii.md,
-            background: colors.panelBgRaised,
-          }}
-        >
-          <div style={{ display: "grid", gap: spacing.sm }}>
-            <div style={{ color: colors.textMuted, fontSize: "11px", fontWeight: 700 }}>チェック設定</div>
-            {renderRows("check")}
+    <section className="settings" aria-label="設定">
+      {sections.map((section) => {
+        const headingId = `settings-${section.id}`;
+        return (
+          <div key={section.id} className="settings__section" role="group" aria-labelledby={headingId}>
+            <h2 id={headingId} className="settings__heading">
+              <span>{section.title}</span>
+              {section.affectsResults && <span className="settings__note">次のチェックから反映</span>}
+            </h2>
+            <div className="settings__rows">
+              {settingRows.filter((row) => row.section === section.id).map((row) => (
+                <div key={row.key}>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={settings[row.key]}
+                      disabled={disabled}
+                      onChange={(event) => setValue(row.key, event.target.checked)}
+                    />
+                    <span className="check-row__label">{row.label}</span>
+                  </label>
+                  {row.help && <p className="settings__help">{row.help}</p>}
+                </div>
+              ))}
+            </div>
           </div>
+        );
+      })}
 
-          <div style={{ display: "grid", gap: spacing.sm }}>
-            <div style={{ color: colors.textMuted, fontSize: "11px", fontWeight: 700 }}>表示・操作設定</div>
-            {renderRows("display")}
-          </div>
-
-          <div style={{ display: "grid", gap: spacing.sm }}>
-            <div style={{ color: colors.textMuted, fontSize: "11px", fontWeight: 700 }}>補助操作</div>
-            <PanelButton
-              onClick={onOpenAcrobatTacCheck}
-              disabled={disabled}
-              variant="secondary"
-              fullWidth
-            >
+      {settings.colorWorkflow === "cmyk" && (
+        <div className="settings__section" role="group" aria-labelledby="settings-tools">
+          <h2 id="settings-tools" className="settings__heading"><span>インク総量の確認</span></h2>
+          <div className="settings__actions">
+            <PanelButton size="small" onClick={onOpenAcrobatTacCheck} disabled={disabled}>
               AcrobatでTAC確認
             </PanelButton>
-            <PanelButton
-              onClick={onCleanupAcrobatPdf}
-              disabled={disabled}
-              variant="utility"
-              fullWidth
-            >
+            <PanelButton size="small" variant="quiet" onClick={onCleanupAcrobatPdf} disabled={disabled}>
               一時PDFを削除
             </PanelButton>
           </div>
+          <p className="settings__help">確認用PDFを書き出し、Acrobat の出力プレビューで開きます。</p>
         </div>
       )}
-    </div>
+    </section>
   );
 };

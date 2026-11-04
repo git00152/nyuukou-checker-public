@@ -3,6 +3,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(import.meta.dirname, "../..");
+const publicReleaseRoot = fs.existsSync(path.join(root, "public-release"))
+  ? path.join(root, "public-release")
+  : root;
 
 describe("public release security boundary", () => {
   it("公開ツリーに配布作成者専用のファイルを含めない", () => {
@@ -17,12 +20,14 @@ describe("public release security boundary", () => {
     ];
 
     for (const relativePath of maintainerOnlyPaths) {
-      expect(fs.existsSync(path.join(root, relativePath))).toBe(false);
+      expect(fs.existsSync(path.join(publicReleaseRoot, relativePath))).toBe(false);
     }
   });
 
   it("公開 package.json に署名・証明書・開発用インストーラーの script を公開しない", () => {
-    const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(publicReleaseRoot, "package.json"), "utf8"),
+    );
 
     for (const scriptName of ["installer", "verify:cep", "cert:self", "package:zxp", "zxp", "zip"]) {
       expect(packageJson.scripts[scriptName]).toBeUndefined();
@@ -30,15 +35,15 @@ describe("public release security boundary", () => {
   });
 
   it("公開ビルド設定は dotenv と署名用環境変数を扱わない", () => {
-    const viteConfig = fs.readFileSync(path.join(root, "vite.config.ts"), "utf8");
+    const viteConfig = fs.readFileSync(path.join(publicReleaseRoot, "vite.config.ts"), "utf8");
 
     expect(viteConfig).not.toContain("dotenv");
     expect(viteConfig).not.toContain("ZXP_CERT_PASSWORD");
   });
 
   it("公開文書は配布元・SHA-256・セキュリティ方針を案内する", () => {
-    const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
-    const security = fs.readFileSync(path.join(root, "SECURITY.md"), "utf8");
+    const readme = fs.readFileSync(path.join(publicReleaseRoot, "README.md"), "utf8");
+    const security = fs.readFileSync(path.join(publicReleaseRoot, "SECURITY.md"), "utf8");
 
     expect(readme).toContain("GitHub Releases");
     expect(readme).toMatch(/SHA-256:\s*`[a-f0-9]{64}`/);

@@ -1,75 +1,39 @@
 import React from "react";
-import { colors, radii, shadows } from "../styles/tokens";
 
-type PanelButtonVariant = "primary" | "secondary" | "utility" | "toolbar";
+type PanelButtonVariant = "primary" | "default" | "quiet" | "danger";
 
 export interface PanelButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: PanelButtonVariant;
-  fullWidth?: boolean;
+  size?: "regular" | "small";
+  /** アイコンだけのボタン。aria-label を必ず渡す。 */
+  icon?: boolean;
   pressed?: boolean;
 }
 
-const variantStyle: Record<PanelButtonVariant, React.CSSProperties> = {
-  primary: {
-    background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryStrong})`,
-    color: "#fff",
-    border: "none",
-    boxShadow: shadows.primary,
-    fontSize: "13px",
-  },
-  secondary: {
-    background: "rgba(255,255,255,0.08)",
-    color: "#dbeafe",
-    border: `1px solid rgba(147, 197, 253, 0.35)`,
-    fontSize: "12px",
-  },
-  utility: {
-    background: "rgba(255,255,255,0.04)",
-    color: "#cbd5e1",
-    border: "1px solid rgba(203, 213, 225, 0.22)",
-    fontSize: "12px",
-  },
-  toolbar: {
-    background: "#fff",
-    color: "#1f2937",
-    border: `1px solid ${colors.previewBorder}`,
-    fontSize: "12px",
-  },
-};
-
+/** パネル共通のボタン。見た目は panel.css の .btn 系クラスで決める。 */
 export const PanelButton: React.FC<PanelButtonProps> = ({
-  variant = "secondary",
-  fullWidth = false,
-  pressed = false,
-  disabled,
-  style,
+  variant = "default",
+  size = "regular",
+  icon = false,
+  pressed,
+  className,
+  type = "button",
   children,
   ...buttonProps
 }) => {
-  const base = variantStyle[variant];
+  const classes = ["btn"];
+  if (variant === "primary") classes.push("btn--primary");
+  if (variant === "quiet") classes.push("btn--quiet");
+  if (variant === "danger") classes.push("btn--quiet", "btn--danger");
+  if (size === "small") classes.push("btn--small");
+  if (icon) classes.push("btn--icon");
+  if (className) classes.push(className);
   return (
     <button
       {...buttonProps}
-      disabled={disabled}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "6px",
-        width: fullWidth ? "100%" : undefined,
-        minHeight: variant === "toolbar" ? "28px" : undefined,
-        padding: variant === "toolbar" ? "4px 9px" : "8px 10px",
-        borderRadius: radii.sm,
-        cursor: disabled ? "default" : "pointer",
-        fontWeight: 600,
-        letterSpacing: 0,
-        opacity: disabled ? 0.64 : 1,
-        outlineColor: colors.focus,
-        ...base,
-        ...(pressed ? { background: colors.primary, color: "#fff", borderColor: colors.primary } : null),
-        ...(disabled && variant === "primary" ? { background: "#2d3748", boxShadow: "none" } : null),
-        ...style,
-      }}
+      type={type}
+      aria-pressed={pressed === undefined ? buttonProps["aria-pressed"] : pressed}
+      className={classes.join(" ")}
     >
       {children}
     </button>

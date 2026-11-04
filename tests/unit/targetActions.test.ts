@@ -214,11 +214,11 @@ describe("targetActions", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("未使用スウォッチを削除し、使用中スウォッチは削除しない", () => {
+  it("スウォッチは未使用判定でも削除しない（使用中特色のプロセス化事故を防ぐ）", () => {
     const unusedRemove = vi.fn();
     vi.stubGlobal("app", {
       activeDocument: {
-        swatches: [{ name: "Unused Spot", remove: unusedRemove }],
+        swatches: [{ name: "Unused Spot", remove: unusedRemove, color: { typename: "SpotColor", spot: { name: "Unused Spot" } } }],
         allPageItems: [],
       },
       redraw: mockRedraw,
@@ -228,24 +228,8 @@ describe("targetActions", () => {
       kind: "swatch",
       messageKey: "COLOR_UNUSED_SWATCH_01",
       swatchName: "Unused Spot",
-    })).toMatchObject({ ok: true, deletedCount: 1 });
-    expect(unusedRemove).toHaveBeenCalledOnce();
-
-    const usedRemove = vi.fn();
-    vi.stubGlobal("app", {
-      activeDocument: {
-        swatches: [{ name: "Used Spot", remove: usedRemove }],
-        allPageItems: [{ fillColor: { typename: "SpotColor", spot: { name: "Used Spot" } } }],
-      },
-      redraw: mockRedraw,
-    });
-
-    expect(deleteCheckTarget({
-      kind: "swatch",
-      messageKey: "COLOR_UNUSED_SWATCH_01",
-      swatchName: "Used Spot",
-    })).toMatchObject({ ok: false, reason: "STILL_IN_USE" });
-    expect(usedRemove).not.toHaveBeenCalled();
+    })).toMatchObject({ ok: false, reason: "UNSUPPORTED_TARGET" });
+    expect(unusedRemove).not.toHaveBeenCalled();
   });
 
   it("cleanupCheckTargets は同じ messageKey の targetRef だけを削除する", () => {

@@ -1,7 +1,6 @@
 import React from "react";
 import type { CheckResult } from "../../../jsx/hostscript/types";
 import { getMessageDetail } from "../data/messages";
-import { colors, spacing } from "../styles/tokens";
 
 export interface MessageKeyFilterItem {
   key: string;
@@ -40,40 +39,18 @@ export const IssueFilterPanel: React.FC<IssueFilterPanelProps> = ({
   activeMessageKeys,
   onToggleMessageKey,
 }) => (
-  <div
-    style={{
-      flexBasis: "100%",
-      display: "flex",
-      flexDirection: "column",
-      gap: "5px",
-      marginTop: spacing.xs,
-      paddingTop: spacing.sm,
-      borderTop: `1px solid ${colors.panelBorderSoft}`,
-    }}
-  >
+  <div className="filter-detail">
     {items.map((item) => {
       const checked = activeMessageKeys === null || activeMessageKeys === undefined || activeMessageKeys.has(item.key);
       return (
-        <label
-          key={item.key}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: spacing.sm,
-            color: checked ? colors.text : "#64748b",
-            fontSize: "11px",
-            lineHeight: 1.35,
-            cursor: "pointer",
-          }}
-        >
+        <label key={item.key} className="check-row" data-checked={checked ? "true" : "false"}>
           <input
             type="checkbox"
             checked={checked}
             onChange={() => onToggleMessageKey(item.key)}
-            style={{ accentColor: colors.info }}
           />
-          <span style={{ flex: "1 1 auto", minWidth: 0 }}>{item.label}</span>
-          <span style={{ flex: "0 0 auto", color: colors.textSubtle, fontSize: "10px" }}>{item.count}</span>
+          <span className="check-row__label">{item.label}</span>
+          <span className="check-row__count">{item.count}</span>
         </label>
       );
     })}

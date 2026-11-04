@@ -6,6 +6,8 @@ import { jsxInclude, jsxBin, jsxPonyfill } from "vite-cep-plugin";
 import { CEP_Config } from "vite-cep-plugin";
 import json from "@rollup/plugin-json";
 import path from "path";
+// @ts-ignore -- ビルド補助の .mjs（型定義なし）
+import { extendscriptAscii } from "./scripts/extendscript-ascii.mjs";
 
 const GLOBAL_THIS = "thisObj";
 
@@ -48,6 +50,8 @@ export const extendscriptConfig = (
         iife: true,
         globalThis: GLOBAL_THIS,
       }),
+      // 日本語メッセージの文字化け防止（ExtendScript は BOM なしを UTF-8 として読まない）
+      extendscriptAscii(),
       jsxBin(isPackage ? cepConfig.zxp.jsxBin : cepConfig.build?.jsxBin),
     ],
   };

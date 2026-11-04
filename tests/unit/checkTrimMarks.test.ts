@@ -193,6 +193,8 @@ describe("detectInspectionScope", () => {
 
     const result = detectInspectionScope(mockDoc);
     // 内周計算: innerLeft=0, innerTop=100, innerRight=100, innerBottom=0 → artboard と一致
+    expect(result.confidence).toBe("medium");
+    expect(result.notes?.length).toBeGreaterThan(0);
     expect(result.bounds[0]).toBeCloseTo(0, 0);
     expect(result.bounds[1]).toBeCloseTo(100, 0);
     expect(result.bounds[2]).toBeCloseTo(100, 0);
@@ -369,11 +371,10 @@ describe("detectInspectionScope — センタートンボ除外", () => {
     } as unknown as Document;
 
     const result = detectInspectionScope(mockDoc);
-    // センタートンボを含めた全パスで計算すると歪むが、四隅のみで計算すれば正確
-    expect(result.bounds[0]).toBeCloseTo(0, 0);   // innerLeft ≈ 0
-    expect(result.bounds[1]).toBeCloseTo(100, 0); // innerTop ≈ 100
-    expect(result.bounds[2]).toBeCloseTo(100, 0); // innerRight ≈ 100
-    expect(result.bounds[3]).toBeCloseTo(0, 0);   // innerBottom ≈ 0
+    // 対象アートボードから離れた候補は別ボードのトンボと区別できないため、
+    // 安全側にアートボードへフォールバックする。
+    expect(result.bounds).toEqual([200, 300, 400, 100]);
+    expect(result.scopeSource).toBe("artboard");
   });
 
   it("CENTER-01b: 内周計算結果は 3mm 縮小してアートボード端に合わせる（日本語トンボの内廻しギャップを補正）", () => {
@@ -628,5 +629,41 @@ describe("detectInspectionScope — レイヤー名によるトンボ検出", ()
 
     const result = detectInspectionScope(mockDoc);
     expect(result.bounds).toEqual([0, 100, 100, 0]);
+  });
+});
+
+describe("detectInspectionScope — 複数アートボード", () => {
+  // 矩形 [L,T,R,B] の外側 9pt に Illustrator 標準のコーナートンボ（長さ 20pt）を作る
+  function cornerMarks(rect: [number, number, number, number]) {
+    const [L, T, R, B] = rect;
+    const reg = { typename: "RegistrationColor" };
+    const line = (gb: [number, number, number, number]) => ({ typename: "PathItem", stroked: true, strokeColor: reg, geometricBounds: gb });
+    return [
+      line([L - 29, B, L - 9, B]), line([L, B - 9, L, B - 29]),
+      line([L - 29, T, L - 9, T]), line([L, T + 29, L, T + 9]),
+      line([R + 9, B, R + 29, B]), line([R, B - 9, R, B - 29]),
+      line([R + 9, T, R + 29, T]), line([R, T + 29, R, T + 9]),
+    ];
+  }
+
+  const ab0: [number, number, number, number] = [0, 297, 210, 0];
+  const ab1: [number, number, number, number] = [300, 297, 510, 0];
+
+  function makeDoc(active: number) {
+    const artboards = [{ artboardRect: ab0 }, { artboardRect: ab1 }] as unknown as { getActiveArtboardIndex: () => number };
+    artboards.getActiveArtboardIndex = () => active;
+    return {
+      layers: [{ name: "L", pageItems: cornerMarks(ab0).concat(cornerMarks(ab1)), layers: [] }],
+      artboards,
+    } as unknown as Document;
+  }
+
+  it("アートボード番号を指定すると、そのアートボードのトンボだけで断裁範囲を求める", () => {
+    expect(detectInspectionScope(makeDoc(0), 0).bounds).toEqual(ab0);
+    expect(detectInspectionScope(makeDoc(0), 1).bounds).toEqual(ab1);
+  });
+
+  it("番号を省略した場合はアクティブアートボードを使う", () => {
+    expect(detectInspectionScope(makeDoc(1)).bounds).toEqual(ab1);
   });
 });

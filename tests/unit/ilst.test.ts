@@ -9,7 +9,7 @@ vi.mock("../../src/jsx/hostscript/runner", () => ({
 
 // ExtendScript グローバル File・Folder のスタブ
 // cleanupPreview は呼び出し時にこれらを参照するため、呼び出し前にスタブを設定する
-const mockRemove = vi.fn();
+const mockRemove = vi.fn(() => true);
 const mockFileInstance: { exists: boolean; fsName: string; remove: () => void } = {
   exists: true,
   fsName: "/private/var/folders/test/T/nyuukou-acrobat-tac-check.pdf",
@@ -128,5 +128,49 @@ describe("cleanupAcrobatCheckPdf", () => {
 
     expect(mockRemove).not.toHaveBeenCalled();
     expect(result).toEqual({ removed: false });
+  });
+});
+
+
+describe("検査したドキュメントへの操作制限", () => {
+  it("再検査が失敗しても旧scanIdの対象操作を失効させる", async () => {
+    const host = await import("../../src/jsx/ilst/ilst");
+    const { runner } = await import("../../src/jsx/hostscript/runner");
+    vi.stubGlobal("app", { activeDocument: { artboards: [{ name: "A", artboardRect: [0, 100, 100, 0] }] } });
+    const ref = { kind: "pathItem" as const, messageKey: "PATH_STRAY_01" };
+    vi.mocked(runner.runAll).mockReturnValueOnce({
+      results: [{ severity: "WARNING", messageKey: "PATH_STRAY_01", message: "test", targetRef: ref }],
+      scopeInfo: { bounds: [0, 100, 100, 0], hasIncompleteMarks: false },
+    });
+    host.runArtboardCheck(0);
+    vi.mocked(runner.runAll).mockImplementationOnce(() => { throw new Error("scan failed"); });
+    expect(() => host.runArtboardCheck(0)).toThrow("scan failed");
+    expect(host.selectCheckTarget(ref)).toEqual({ ok: false, reason: "STALE_SCAN" });
+  });
+
+  it("ドキュメントを切り替えた後の削除・選択・プレビューを止める", async () => {
+    const host = await import("../../src/jsx/ilst/ilst");
+    const { runner } = await import("../../src/jsx/hostscript/runner");
+    vi.mocked(runner.runAll).mockReturnValue({ results: [], scopeInfo: { bounds: [0, 100, 100, 0], hasIncompleteMarks: false } });
+    const doc = { artboards: { getActiveArtboardIndex: () => 0 } };
+    vi.stubGlobal("app", { activeDocument: doc });
+    host.runAll();
+    vi.stubGlobal("app", { activeDocument: { ...doc } });
+    const ref = { kind: "pathItem" as const };
+    expect(host.deleteCheckTarget(ref)).toEqual({ ok: false, reason: "DOCUMENT_CHANGED" });
+    expect(host.selectCheckTarget(ref)).toEqual({ ok: false, reason: "DOCUMENT_CHANGED" });
+    expect(host.cleanupCheckTargets("PATH_STRAY_01", [ref])).toEqual({ ok: false, reason: "DOCUMENT_CHANGED" });
+    expect(host.exportArtboardPreview()).toBe("");
+  });
+
+  it("runArtboardCheck は入稿プロファイル（colorWorkflow）を runner に渡す", async () => {
+    const host = await import("../../src/jsx/ilst/ilst");
+    const { runner } = await import("../../src/jsx/hostscript/runner");
+    vi.stubGlobal("app", { activeDocument: { artboards: [{ name: "A", artboardRect: [0, 100, 100, 0] }] } });
+    vi.mocked(runner.runAll).mockReturnValueOnce({ results: [], scopeInfo: { bounds: [0, 100, 100, 0], hasIncompleteMarks: false } });
+
+    host.runArtboardCheck(0, { colorWorkflow: "rgb" });
+
+    expect(vi.mocked(runner.runAll)).toHaveBeenLastCalledWith(undefined, expect.objectContaining({ colorWorkflow: "rgb", artboardIndex: 0 }));
   });
 });

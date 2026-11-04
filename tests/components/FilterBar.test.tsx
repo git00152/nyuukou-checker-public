@@ -30,9 +30,9 @@ describe("FilterBar", () => {
       />
     );
     // ボタンの textContent（ERROR3, WARNING2, INFO1）を確認
-    const errorBtn = screen.getByRole("button", { name: /ERROR/ });
-    const warningBtn = screen.getByRole("button", { name: /WARNING/ });
-    const infoBtn = screen.getByRole("button", { name: /INFO/ });
+    const errorBtn = screen.getByRole("button", { name: /要修正/ });
+    const warningBtn = screen.getByRole("button", { name: /要確認/ });
+    const infoBtn = screen.getByRole("button", { name: /参考/ });
     expect(errorBtn.textContent).toMatch(/3/);
     expect(warningBtn.textContent).toMatch(/2/);
     expect(infoBtn.textContent).toMatch(/1/);
@@ -49,7 +49,7 @@ describe("FilterBar", () => {
       />
     );
     // aria-pressed="true" で active 状態を確認
-    const errorButton = screen.getByRole("button", { name: /ERROR/ });
+    const errorButton = screen.getByRole("button", { name: /要修正/ });
     expect(errorButton).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -63,7 +63,7 @@ describe("FilterBar", () => {
         onSelectSeverityFilter={onSelectSeverityFilter}
       />
     );
-    const errorButton = screen.getByRole("button", { name: /ERROR/ });
+    const errorButton = screen.getByRole("button", { name: /要修正/ });
     expect(errorButton).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -77,7 +77,7 @@ describe("FilterBar", () => {
         onSelectSeverityFilter={onSelectSeverityFilter}
       />
     );
-    const errorButton = screen.getByRole("button", { name: /ERROR/ });
+    const errorButton = screen.getByRole("button", { name: /要修正/ });
     fireEvent.click(errorButton);
     expect(onSelectSeverityFilter).toHaveBeenCalledWith("ERROR");
   });
@@ -92,7 +92,7 @@ describe("FilterBar", () => {
         onSelectSeverityFilter={onSelectSeverityFilter}
       />
     );
-    const warningButton = screen.getByRole("button", { name: /WARNING/ });
+    const warningButton = screen.getByRole("button", { name: /要確認/ });
     fireEvent.click(warningButton);
     expect(onSelectSeverityFilter).toHaveBeenCalledWith("WARNING");
   });
@@ -107,7 +107,7 @@ describe("FilterBar", () => {
         onSelectSeverityFilter={onSelectSeverityFilter}
       />
     );
-    const infoButton = screen.getByRole("button", { name: /INFO/ });
+    const infoButton = screen.getByRole("button", { name: /参考/ });
     fireEvent.click(infoButton);
     expect(onSelectSeverityFilter).toHaveBeenCalledWith("INFO");
   });
@@ -148,10 +148,49 @@ describe("FilterBar", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "フィルタ詳細" }));
+    fireEvent.click(screen.getByRole("button", { name: "検出項目で絞り込む" }));
     expect(screen.getByLabelText(/0.28pt未満の細線が検出されました/)).toBeInTheDocument();
     expect(screen.getByLabelText(/UNKNOWN_KEY/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/0.28pt未満の細線が検出されました/));
     expect(onToggleMessageKey).toHaveBeenCalledWith("PATH_THIN_LINE_01");
+  });
+
+  it("全件表示中は「すべて表示」を出さず、絞り込み中だけ表示件数と解除ボタンを出す", () => {
+    const onResetFilters = vi.fn();
+    const { rerender } = render(
+      <FilterBar
+        results={makeResults()}
+        visibleCount={6}
+        activeFilters={new Set<Severity>(["ERROR", "WARNING", "INFO"])}
+        onSelectSeverityFilter={vi.fn()}
+        onResetFilters={onResetFilters}
+      />
+    );
+    expect(screen.queryByRole("button", { name: "すべて表示" })).not.toBeInTheDocument();
+
+    rerender(
+      <FilterBar
+        results={makeResults()}
+        visibleCount={3}
+        activeFilters={new Set<Severity>(["ERROR"])}
+        onSelectSeverityFilter={vi.fn()}
+        onResetFilters={onResetFilters}
+      />
+    );
+    expect(screen.getByText("3 / 6 件")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "すべて表示" }));
+    expect(onResetFilters).toHaveBeenCalled();
+  });
+
+  it("0 件の重要度は押せない", () => {
+    render(
+      <FilterBar
+        results={[{ severity: "ERROR", messageKey: "e1", message: "e" }]}
+        activeFilters={new Set<Severity>(["ERROR", "WARNING", "INFO"])}
+        onSelectSeverityFilter={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("button", { name: /要確認/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /要修正/ })).toBeEnabled();
   });
 });

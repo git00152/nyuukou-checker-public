@@ -1,6 +1,6 @@
 import React from "react";
 import { PanelButton } from "./PanelButton";
-import { colors, spacing } from "../styles/tokens";
+import { FitIcon, TargetIcon, ZoomInIcon, ZoomOutIcon } from "./icons";
 
 export interface PreviewToolbarProps {
   zoomPercent: number;
@@ -21,32 +21,23 @@ export const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   onFitToView,
   onScrollToSelected,
 }) => (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: spacing.sm,
-      padding: spacing.md,
-      borderBottom: `1px solid ${colors.previewBorder}`,
-      background: colors.previewToolbarBg,
-      flexShrink: 0,
-      overflowX: "auto",
-    }}
-  >
-    <PanelButton type="button" variant="toolbar" aria-label="縮小" onClick={onZoomOut}>-</PanelButton>
-    <PanelButton type="button" variant="toolbar" aria-label="100%に戻す" onClick={onResetZoom}>
+  <div className="preview-toolbar" role="toolbar" aria-label="プレビュー表示">
+    <PanelButton variant="quiet" icon aria-label="縮小" title="縮小（-）" onClick={onZoomOut}><ZoomOutIcon /></PanelButton>
+    <PanelButton variant="quiet" size="small" className="preview-toolbar__zoom" aria-label="100%に戻す" title="100%に戻す（0）" onClick={onResetZoom}>
       {zoomPercent}%
     </PanelButton>
-    <PanelButton type="button" variant="toolbar" aria-label="拡大" onClick={onZoomIn}>+</PanelButton>
-    <PanelButton type="button" variant="toolbar" aria-label="全体表示" onClick={onFitToView}>全体</PanelButton>
+    <PanelButton variant="quiet" icon aria-label="拡大" title="拡大（+）" onClick={onZoomIn}><ZoomInIcon /></PanelButton>
+    <span className="preview-toolbar__sep" aria-hidden="true" />
+    <PanelButton variant="quiet" icon aria-label="全体表示" title="全体表示" onClick={onFitToView}><FitIcon /></PanelButton>
     <PanelButton
-      type="button"
-      variant="toolbar"
+      variant="quiet"
+      icon
       aria-label="選択項目へ移動"
+      title="選択項目へ移動"
       onClick={onScrollToSelected}
       disabled={!hasSelection}
     >
-      選択へ
+      <TargetIcon />
     </PanelButton>
   </div>
 );

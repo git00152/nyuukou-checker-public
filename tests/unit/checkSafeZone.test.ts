@@ -94,4 +94,15 @@ describe("checkSafeZone", () => {
     expect(Array.isArray(results[0].bounds)).toBe(true);
     expect(results[0].bounds).toEqual([5, 292, 205, 5]);
   });
+
+  it("トンボ範囲の信頼度が未確定ならWARNINGではなくINFOにする", () => {
+    const results = checkSafeZone([
+      { name: "推定範囲内テキスト", geometricBounds: [5, 292, 205, 5] },
+    ], {
+      ...scope,
+      scopeSource: "trim-marks",
+      confidence: "medium",
+    });
+    expect(results[0].severity).toBe("INFO");
+  });
 });

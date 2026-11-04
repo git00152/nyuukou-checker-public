@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { App } from "../../src/js/main/index";
 
@@ -31,7 +31,25 @@ const openSettings = () => {
 describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockExecFile.mockImplementation((_file, _args, callback) => {
+      (callback as Function)(null);
+      return {} as ReturnType<typeof mockExecFile>;
+    });
     vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("CEP一覧取得が失敗してもチェック時に再試行し、旧APIへ進まない", async () => {
+    const originalCep = (window as any).cep;
+    (window as any).cep = {};
+    try {
+      mockEvalTS.mockRejectedValue(new Error("metadata unavailable"));
+      render(<App />);
+      await waitFor(() => expect(mockEvalTS).toHaveBeenCalledTimes(1));
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "チェック実行" })); });
+      expect(mockEvalTS).toHaveBeenCalledTimes(2);
+      expect(mockEvalTS.mock.calls.every(call => call[0] === "getArtboards")).toBe(true);
+      expect(screen.getByRole("alert")).toHaveTextContent("metadata unavailable");
+    } finally { (window as any).cep = originalCep; }
   });
 
   // Test 1: 初期状態（idle）で「チェック実行」ボタンが右ペインに表示される
@@ -62,6 +80,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
     await waitFor(() => {
       expect(mockEvalTS).toHaveBeenCalledWith("runAll", {
+        colorWorkflow: "cmyk",
         largePrintMode: false,
         detectOpenPaths: true,
         detectFilledOpenPaths: true,
@@ -76,17 +95,48 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     render(<App />);
     openSettings();
     fireEvent.click(screen.getByRole("checkbox", { name: /大判印刷モード/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /オープンパスを検出する/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /ガイドを検出対象に含める/ }));
-
+    fireEvent.click(screen.getByRole("checkbox", { name: "オープンパス" }));
     fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
 
     await waitFor(() => {
       expect(mockEvalTS).toHaveBeenCalledWith("runAll", expect.objectContaining({
         largePrintMode: true,
         detectOpenPaths: false,
-        includeGuides: true,
+        includeTrimMarkLayers: false,
       }));
+    });
+  });
+
+  describe("入稿プロファイル", () => {
+    it("設定を開かなくても入稿プロファイルを選べ、既定は CMYK 入稿", () => {
+      render(<App />);
+      expect(screen.getByRole("radio", { name: /CMYK入稿/ })).toBeChecked();
+      expect(screen.getByRole("radio", { name: /RGB入稿/ })).not.toBeChecked();
+    });
+
+    it("RGB入稿を選ぶと runAll に colorWorkflow: rgb が渡る", async () => {
+      mockEvalTS.mockResolvedValue({ results: [], scopeInfo: mockScopeInfo });
+      render(<App />);
+      fireEvent.click(screen.getByRole("radio", { name: /RGB入稿/ }));
+      fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
+      await waitFor(() => {
+        expect(mockEvalTS).toHaveBeenCalledWith("runAll", expect.objectContaining({ colorWorkflow: "rgb" }));
+      });
+    });
+
+    it("RGB入稿では Acrobat の TAC 確認を表示しない", () => {
+      render(<App />);
+      fireEvent.click(screen.getByRole("radio", { name: /RGB入稿/ }));
+      openSettings();
+      expect(screen.queryByRole("button", { name: /AcrobatでTAC確認/ })).not.toBeInTheDocument();
+    });
+
+    it("選んだ入稿プロファイルはパネルを開き直しても保持される", () => {
+      const { unmount } = render(<App />);
+      fireEvent.click(screen.getByRole("radio", { name: /RGB入稿/ }));
+      unmount();
+      render(<App />);
+      expect(screen.getByRole("radio", { name: /RGB入稿/ })).toBeChecked();
     });
   });
 
@@ -97,7 +147,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
     await waitFor(() => {
       expect(screen.getByTestId("spinner")).toBeInTheDocument();
-      expect(screen.getByText(/チェック中です/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "チェック中…" })).toBeDisabled();
     });
   });
 
@@ -112,7 +162,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     await waitFor(() => {
       // scopeInfo がセットされると SVGPreview が SVG を描画し、results が ResultList に渡る
       expect(screen.getAllByText(/エラーが発生しました/).length).toBeGreaterThan(0);
-      expect(screen.getByText(/チェックが完了しました。検出: 1件/)).toBeInTheDocument();
+      expect(screen.getByText(/^チェック済み/)).toBeInTheDocument();
     });
     // SVGPreview が SVG を描画していること（querySelector で確認）
     const svgEl = document.querySelector("svg");
@@ -147,7 +197,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       expect(screen.getAllByText(/エラーが発生しました/).length).toBeGreaterThan(0);
     });
     // ERROR フィルタボタンをクリックして ERROR のみに絞り込む
-    const errorFilterBtn = screen.getByRole("button", { pressed: true, name: /ERROR/ });
+    const errorFilterBtn = screen.getByRole("button", { pressed: true, name: /要修正/ });
     fireEvent.click(errorFilterBtn);
     await waitFor(() => {
       expect(screen.getAllByText(/エラーが発生しました/).length).toBeGreaterThan(0);
@@ -168,12 +218,12 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       expect(screen.getAllByText(/警告があります/).length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByRole("button", { pressed: true, name: /ERROR/ }));
+    fireEvent.click(screen.getByRole("button", { pressed: true, name: /要修正/ }));
     await waitFor(() => {
       expect(screen.queryByText(/警告があります/)).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { pressed: true, name: /ERROR/ }));
+    fireEvent.click(screen.getByRole("button", { pressed: true, name: /要修正/ }));
     await waitFor(() => {
       expect(screen.getAllByText(/エラーが発生しました/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/警告があります/).length).toBeGreaterThan(0);
@@ -193,7 +243,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       expect(screen.getAllByText(/空パスがあります/).length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "フィルタ詳細" }));
+    fireEvent.click(screen.getByRole("button", { name: "検出項目で絞り込む" }));
     fireEvent.click(screen.getByLabelText(/塗りなし・線なしの空パスが検出されました/));
 
     await waitFor(() => {
@@ -230,13 +280,13 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       expect(screen.getByTestId("overlay-rect")).toHaveAttribute("data-selected", "true");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "フィルタ詳細" }));
+    fireEvent.click(screen.getByRole("button", { name: "検出項目で絞り込む" }));
     fireEvent.click(screen.getByLabelText(/0.28pt未満の細線が検出されました/));
 
     expect(screen.queryByTestId("overlay-rect")).not.toBeInTheDocument();
   });
 
-  // Test 8: フィルタ変更時に selectedIndex が null にリセットされる（RESEARCH.md Pitfall 3）
+  // Test 8: フィルタ変更時に selectedIndex が null にリセットされる
   it("Test 8: フィルタ変更時に selectedIndex が null にリセットされる", async () => {
     const results = [
       { severity: "ERROR" as const, messageKey: "e1", message: "エラーが発生しました", bounds: [0, 297, 210, 0] as [number, number, number, number] },
@@ -257,7 +307,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     });
     fireEvent.click(errorItem);
     // WARNING フィルタを選択して selectedIndex がリセットされることを確認
-    const warningFilterBtn = screen.getByRole("button", { pressed: true, name: /WARNING/ });
+    const warningFilterBtn = screen.getByRole("button", { pressed: true, name: /要確認/ });
     fireEvent.click(warningFilterBtn);
     // selectedIndex がリセットされると overlay-rect の data-selected が "false" になるはず
     const overlayRects = screen.queryAllByTestId("overlay-rect");
@@ -354,15 +404,18 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       filePath: "/tmp/preflight-preview.png",
       artboardBounds: [-3, 300, 213, -3] as [number, number, number, number],
     };
+    const metadata = { artboards: [{ index: 0, name: "A", rect: [0, 297, 210, 0] }], activeArtboardIndex: 0, documentKey: "doc", inspectionEpoch: "1", artboardsFingerprint: "A" };
     mockEvalTS
-      .mockResolvedValueOnce({ results: [], scopeInfo: mockScopeInfo })
+      .mockResolvedValueOnce(metadata)
+      .mockResolvedValueOnce(metadata)
+      .mockResolvedValueOnce({ results: [], scopeInfo: mockScopeInfo, scanId: "s1" })
       .mockResolvedValueOnce(mockPreviewResult);
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
     await waitFor(() => {
-      // evalTS が 2 回呼ばれていること（runAll + exportArtboardPreview）
-      expect(mockEvalTS).toHaveBeenCalledTimes(2);
-      expect(mockEvalTS).toHaveBeenNthCalledWith(2, "exportArtboardPreview");
+      // evalTS が一覧・検査・プレビューの3回呼ばれていること
+      expect(mockEvalTS).toHaveBeenCalledTimes(4);
+      expect(mockEvalTS).toHaveBeenNthCalledWith(4, "exportArtboardPreview", 0, "s1");
     });
     // fs.readFileSync がファイルパスと 'base64' で呼ばれること
     expect(mockReadFileSync).toHaveBeenCalledWith("/tmp/preflight-preview.png", "base64");
@@ -392,20 +445,6 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     expect(screen.queryByText(/CEP not available/)).toBeNull();
     // preview-image 要素が存在しないこと（data URL が設定されていない）
     expect(document.querySelector("[data-testid='preview-image']")).toBeNull();
-  });
-
-  // Test 17: status が "checking" のとき、ボタンにステップ名が表示される
-  it("Test 17: status が checking のとき、ボタンにステップ名テキストが表示される（固定の「チェック中...」ではない）", async () => {
-    mockEvalTS.mockReturnValue(new Promise(() => {})); // never resolves
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /チェック実行/ }));
-    await waitFor(() => {
-      // status=checking 中はボタンテキストが CHECKING_STEPS の最初のステップ名（または後続）になる
-      // 「チェック中...」という固定テキストは表示されない
-      const btn = screen.getByRole("button", { name: /中…|の検査中…|の確認中…/ });
-      // CHECKING_STEPS のいずれかのステップ名（または「中…」を含む）が表示されていること
-      expect(btn.textContent).toMatch(/中…|の検査中…|の確認中…/);
-    });
   });
 
   // Test 18: status が "checking" から "done" に変わったとき、ボタンテキストが「チェック実行」に戻る
@@ -465,7 +504,7 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
     render(<App />);
     openSettings();
 
-    fireEvent.click(screen.getByRole("button", { name: /AcrobatでTAC確認/ }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /AcrobatでTAC確認/ })); });
 
     expect(mockEvalTS).not.toHaveBeenCalledWith("exportAcrobatCheckPdf");
     expect(mockExecFile).not.toHaveBeenCalled();
@@ -662,5 +701,126 @@ describe("App (index.tsx) — 2ペインレイアウト統合テスト", () => {
       expect(mockEvalTS).toHaveBeenCalledWith("deleteCheckTarget", results[0].targetRef);
       expect(mockEvalTS).toHaveBeenCalledWith("runAll", expect.any(Object));
     });
+  });
+});
+
+describe("検査結果の状態と操作の回帰", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockExecFile.mockImplementation((_file, _args, callback) => {
+      (callback as Function)(null);
+      return {} as ReturnType<typeof mockExecFile>;
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("フィルタで0件になっても問題なしと表示せず、解除で結果を戻す", async () => {
+    mockEvalTS.mockResolvedValue({ results: [{ severity: "ERROR", messageKey: "err", message: "修正が必要な検出" }], scopeInfo: mockScopeInfo });
+    render(<App />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "チェック実行" })); });
+    fireEvent.click(screen.getByRole("button", { name: "検出項目で絞り込む" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /err/ }));
+    expect(screen.queryByText(/問題は検出されませんでした/)).not.toBeInTheDocument();
+    expect(screen.getByText(/このフィルタに一致する結果はありません/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "フィルタを解除" }));
+    expect(screen.getByRole("button", { name: /修正が必要な検出/ })).toBeInTheDocument();
+  });
+
+  it("プレビューを待っている間は再検査と補助操作を開始させない", async () => {
+    let finish!: (value: string) => void;
+    mockEvalTS.mockResolvedValueOnce({ results: [], scopeInfo: mockScopeInfo })
+      .mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "チェック実行" }));
+    const checking = await screen.findByRole("button", { name: "プレビュー作成中…" });
+    expect(checking).toBeDisabled();
+    openSettings();
+    expect(screen.getByRole("button", { name: "AcrobatでTAC確認" })).toBeDisabled();
+    fireEvent.click(checking);
+    expect(mockEvalTS.mock.calls.filter(call => call[0] === "runAll")).toHaveLength(1);
+    await act(async () => { finish(""); });
+    expect(screen.getByRole("button", { name: "チェック実行" })).toBeEnabled();
+  });
+
+  it("部分失敗は完了通知にせず、検査設定の変更時は再チェックを案内する", async () => {
+    mockEvalTS.mockResolvedValue({ results: [{ severity: "INFO", messageKey: "CHECK_FAILED", message: "check failed" }], scopeInfo: mockScopeInfo });
+    render(<App />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "チェック実行" })); });
+    expect(screen.getByText(/一部の検査を完了できませんでした/)).toBeInTheDocument();
+    openSettings();
+    fireEvent.click(screen.getByRole("checkbox", { name: /大判印刷モード/ }));
+    expect(screen.getByText(/条件が変わりました/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /大判印刷モード/ }));
+    expect(screen.queryByText(/条件が変わりました/)).not.toBeInTheDocument();
+  });
+});
+
+describe("パネルの構成（v1.1.2）", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("設定を開くと結果の代わりに設定が表示され、もう一度押すと結果に戻る", async () => {
+    mockEvalTS.mockResolvedValue({ results: [{ severity: "ERROR", messageKey: "e1", message: "エラーが発生しました" }], scopeInfo: mockScopeInfo });
+    render(<App />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "チェック実行" })); });
+    expect(screen.getByRole("button", { name: /エラーが発生しました/ })).toBeInTheDocument();
+
+    const settingsButton = screen.getByRole("button", { name: "設定" });
+    fireEvent.click(settingsButton);
+    expect(settingsButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("region", { name: "設定" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /エラーが発生しました/ })).not.toBeInTheDocument();
+
+    fireEvent.click(settingsButton);
+    expect(screen.queryByRole("region", { name: "設定" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /エラーが発生しました/ })).toBeInTheDocument();
+  });
+
+  it("判定に効く設定と効かない設定を見出しで区別する", () => {
+    render(<App />);
+    openSettings();
+    const region = screen.getByRole("region", { name: "設定" });
+    expect(region).toHaveTextContent("入稿条件");
+    expect(region).toHaveTextContent("検出対象");
+    expect(region).toHaveTextContent("操作");
+    expect(screen.getAllByText("次のチェックから反映")).toHaveLength(2);
+  });
+
+  it("大判印刷モードを有効にするとヘッダーの入稿条件にも表示される", () => {
+    render(<App />);
+    expect(screen.queryByText("大判")).not.toBeInTheDocument();
+    openSettings();
+    fireEvent.click(screen.getByRole("checkbox", { name: /大判印刷モード/ }));
+    expect(screen.getByText("大判")).toBeInTheDocument();
+  });
+
+  it("重要度別の件数は絞り込みボタンにだけ表示し、完了通知で繰り返さない", async () => {
+    mockEvalTS.mockResolvedValue({ results: [
+      { severity: "ERROR", messageKey: "e1", message: "エラーが発生しました" },
+      { severity: "WARNING", messageKey: "w1", message: "警告があります" },
+    ], scopeInfo: mockScopeInfo });
+    render(<App />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "チェック実行" })); });
+    expect(screen.queryByText(/検出: 2件/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("検出サマリー")).not.toBeInTheDocument();
+    const severityGroup = screen.getByRole("group", { name: "重要度で絞り込む" });
+    expect(within(severityGroup).getByRole("button", { name: /要修正/ })).toHaveTextContent("1");
+  });
+
+  it("Illustrator の UI の明るさをパネルのテーマに反映する", () => {
+    const original = (window as any).__adobe_cep__;
+    (window as any).__adobe_cep__ = {
+      getHostEnvironment: () => JSON.stringify({ appSkinInfo: { panelBackgroundColor: { color: { red: 240, green: 240, blue: 240 } } } }),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    try {
+      render(<App />);
+      expect(document.documentElement.dataset.theme).toBe("lightest");
+    } finally {
+      (window as any).__adobe_cep__ = original;
+    }
   });
 });

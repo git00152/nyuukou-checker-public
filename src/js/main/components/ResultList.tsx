@@ -1,14 +1,19 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CheckResult } from "../../../jsx/hostscript/types";
 import { getMessageDetail } from "../data/messages";
-import { colors, radii, shadows, severityColors, spacing } from "../styles/tokens";
+import { SEVERITY_LABEL } from "../data/severity";
+import { ChevronIcon } from "./icons";
 import { PanelButton } from "./PanelButton";
+import { SeverityMark } from "./SeverityMark";
 
 export interface ResultListProps {
   results: CheckResult[];
   selectedIndex: number | null;
   onSelectIndex: (i: number | null) => void;
   hasScanned?: boolean;
+  totalCount?: number;
+  onResetFilters?: () => void;
+  actionsDisabled?: boolean;
   onSelectTarget?: (result: CheckResult) => void;
   onDeleteTarget?: (result: CheckResult) => void;
   onCleanupTargets?: (messageKey: string, results: CheckResult[]) => void;
@@ -23,50 +28,6 @@ interface ResultGroup {
     index: number;
   }>;
 }
-
-// severity ごとのカードスタイル定義（通常時）
-const SEVERITY_STYLE: Record<
-  CheckResult["severity"],
-  React.CSSProperties
-> = {
-  ERROR: {
-    backgroundColor: "rgba(248, 113, 113, 0.10)",
-    color: "#fca5a5",
-    boxShadow: `${shadows.card}, inset 0 1px 0 rgba(255,255,255,0.05)`,
-  },
-  WARNING: {
-    backgroundColor: "rgba(251, 191, 36, 0.10)",
-    color: "#fcd34d",
-    boxShadow: `${shadows.card}, inset 0 1px 0 rgba(255,255,255,0.05)`,
-  },
-  INFO: {
-    backgroundColor: "rgba(96, 165, 250, 0.10)",
-    color: "#93c5fd",
-    boxShadow: `${shadows.card}, inset 0 1px 0 rgba(255,255,255,0.05)`,
-  },
-};
-
-// severity ごとのカードスタイル定義（展開中）: 影を強めて前面に浮き上がった印象
-const SEVERITY_STYLE_EXPANDED: Record<
-  CheckResult["severity"],
-  React.CSSProperties
-> = {
-  ERROR: {
-    backgroundColor: "rgba(248, 113, 113, 0.22)",
-    color: "#fca5a5",
-    boxShadow: `${shadows.cardActive}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-  },
-  WARNING: {
-    backgroundColor: "rgba(251, 191, 36, 0.22)",
-    color: "#fcd34d",
-    boxShadow: `${shadows.cardActive}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-  },
-  INFO: {
-    backgroundColor: "rgba(96, 165, 250, 0.22)",
-    color: "#93c5fd",
-    boxShadow: `${shadows.cardActive}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-  },
-};
 
 const groupResults = (results: CheckResult[]): ResultGroup[] => {
   const groups: ResultGroup[] = [];
@@ -90,16 +51,32 @@ const groupResults = (results: CheckResult[]): ResultGroup[] => {
   return groups;
 };
 
+const hasAction = (result: CheckResult, actionId: string) =>
+  (result.actions || []).some((action) => action.id === actionId);
+
+const canSelectTarget = (result: CheckResult) =>
+  result.targetRef?.kind === "pathItem" ||
+  result.targetRef?.kind === "textFrame" ||
+  result.targetRef?.kind === "placedItem" ||
+  result.targetRef?.kind === "rasterItem";
+
+/**
+ * 検出結果をチェック種別ごとの折りたたみ行で表示する。
+ * - 説明（影響・対処）はグループに 1 回だけ出す。
+ * - 項目行はオブジェクト名とレイヤー名で見分ける。見出しと同じメッセージは繰り返さない。
+ */
 export const ResultList: React.FC<ResultListProps> = ({
   results,
   selectedIndex,
   onSelectIndex,
   hasScanned = false,
+  totalCount = results.length,
+  onResetFilters,
+  actionsDisabled = false,
   onSelectTarget,
   onDeleteTarget,
   onCleanupTargets,
 }) => {
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(
     () => new Set(results.map((result) => result.messageKey))
   );
@@ -107,22 +84,28 @@ export const ResultList: React.FC<ResultListProps> = ({
     new Set(results.map((result) => result.messageKey))
   );
 
-  // selectedIndex の外部変化でアコーディオン同期
+  // 親が選択状態を持たない使い方でも開閉できるよう、表示上の選択はローカルにも持つ
+  const [localSelected, setLocalSelected] = useState<number | null>(selectedIndex);
   useEffect(() => {
-    setExpandedIndex(selectedIndex);
-    if (selectedIndex !== null) {
-      const selectedResult = results[selectedIndex];
-      if (selectedResult) {
-        setClosedGroups((prev) => {
-          if (!prev.has(selectedResult.messageKey)) return prev;
-          const next = new Set(prev);
-          next.delete(selectedResult.messageKey);
-          return next;
-        });
-      }
-    }
+    setLocalSelected(selectedIndex);
   }, [selectedIndex]);
 
+  const groups = useMemo(() => groupResults(results), [results]);
+
+  // 外部（プレビュー）で選択された項目のグループを開く
+  useEffect(() => {
+    if (selectedIndex === null) return;
+    const selectedResult = results[selectedIndex];
+    if (!selectedResult) return;
+    setClosedGroups((prev) => {
+      if (!prev.has(selectedResult.messageKey)) return prev;
+      const next = new Set(prev);
+      next.delete(selectedResult.messageKey);
+      return next;
+    });
+  }, [selectedIndex, results]);
+
+  // 新しく現れたグループは閉じた状態で始め、消えたグループは忘れる
   useLayoutEffect(() => {
     setClosedGroups((prev) => {
       const currentKeys = new Set(results.map((result) => result.messageKey));
@@ -142,10 +125,10 @@ export const ResultList: React.FC<ResultListProps> = ({
     });
   }, [results]);
 
-  const handleItemClick = (index: number) => {
-    const newIndex = expandedIndex === index ? null : index;
-    setExpandedIndex(newIndex);
-    onSelectIndex(newIndex);
+  const handleItemSelect = (index: number) => {
+    const next = localSelected === index ? null : index;
+    setLocalSelected(next);
+    onSelectIndex(next);
   };
 
   const handleGroupClick = (group: ResultGroup) => {
@@ -160,282 +143,146 @@ export const ResultList: React.FC<ResultListProps> = ({
       return next;
     });
 
-    if (isOpen && selectedIndex !== null && group.items.some((item) => item.index === selectedIndex)) {
-      setExpandedIndex(null);
+    if (isOpen && localSelected !== null && group.items.some((item) => item.index === localSelected)) {
+      setLocalSelected(null);
       onSelectIndex(null);
     }
   };
 
   if (results.length === 0) {
     if (!hasScanned) return null;
+    if (totalCount > 0) {
+      return (
+        <div className="empty-state">
+          <p>このフィルタに一致する結果はありません（全{totalCount}件）。</p>
+          {onResetFilters && <PanelButton size="small" onClick={onResetFilters}>フィルタを解除</PanelButton>}
+        </div>
+      );
+    }
     return (
-      <div
-        style={{
-          margin: spacing.sm,
-          padding: "12px 14px",
-          color: colors.success,
-          backgroundColor: "rgba(74, 222, 128, 0.10)",
-          borderRadius: radii.lg,
-          fontSize: "12px",
-          wordBreak: "break-word",
-          boxShadow: shadows.card,
-        }}
-      >
-        問題は検出されませんでした ✓
+      <div className="empty-state">
+        <p className="empty-state__title">問題は検出されませんでした</p>
       </div>
     );
   }
 
-  const groups = groupResults(results);
-
-  const hasAction = (result: CheckResult, actionId: string) =>
-    (result.actions || []).some((action) => action.id === actionId);
-  const canSelectTarget = (result: CheckResult) =>
-    result.targetRef?.kind === "pathItem" ||
-    result.targetRef?.kind === "textFrame" ||
-    result.targetRef?.kind === "placedItem" ||
-    result.targetRef?.kind === "rasterItem";
-
   return (
-    <ul
-      style={{
-        listStyle: "none",
-        padding: spacing.sm,
-        margin: 0,
-        wordBreak: "break-word",
-        fontSize: "12px",
-      }}
-    >
+    <ul className="result-groups">
       {groups.map((group) => {
         const isGroupOpen = !closedGroups.has(group.key);
-        const groupColor = severityColors[group.severity];
+        const detail = isGroupOpen ? getMessageDetail(group.key) : null;
+        const canCleanup = group.items.some(({ result }) => hasAction(result, "cleanup"));
 
         return (
-          <li
-            key={group.key}
-            data-testid="result-group"
-            style={{
-              marginBottom: spacing.md,
-              listStyle: "none",
-            }}
-          >
+          <li key={group.key} data-testid="result-group" className="result-group">
             <button
               type="button"
+              className="result-group__header"
               aria-expanded={isGroupOpen}
               onClick={() => handleGroupClick(group)}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: spacing.md,
-                padding: "8px 10px",
-                marginBottom: isGroupOpen ? spacing.sm : 0,
-                border: "1px solid rgba(255,255,255,0.10)",
-                borderRadius: radii.md,
-                background: colors.panelBgRaised,
-                color: colors.text,
-                cursor: "pointer",
-                textAlign: "left",
-                font: "inherit",
-              }}
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  color: groupColor,
-                  fontSize: "11px",
-                  width: "10px",
-                  flex: "0 0 auto",
-                }}
-              >
-                {isGroupOpen ? "▼" : "▶"}
-              </span>
-              <span
-                style={{
-                  flex: "0 0 auto",
-                  color: groupColor,
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                {group.severity}
-              </span>
-              <span
-                style={{
-                  flex: "1 1 auto",
-                  minWidth: 0,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontWeight: 700,
-                }}
-              >
-                {group.message}
-              </span>
-              <span
-                style={{
-                  flex: "0 0 auto",
-                  minWidth: "24px",
-                  height: "20px",
-                  padding: "0 6px",
-                  borderRadius: "10px",
-                  background: "rgba(255,255,255,0.12)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                }}
-              >
-                {group.items.length}
-              </span>
+              <span className="result-group__chevron"><ChevronIcon /></span>
+              <SeverityMark severity={group.severity} />
+              <span className="visually-hidden">{SEVERITY_LABEL[group.severity]}</span>
+              <span className="result-group__title">{group.message}</span>
+              <span className="result-group__count">{group.items.length}</span>
             </button>
-            {isGroupOpen && group.items.some(({ result }) => hasAction(result, "cleanup")) && onCleanupTargets && (
-              <div style={{ marginBottom: spacing.sm }}>
-                <PanelButton
-                  type="button"
-                  variant="utility"
-                  fullWidth
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCleanupTargets(
-                      group.key,
-                      group.items.map((item) => item.result)
-                    );
-                  }}
-                >
-                  この項目をすべて削除
-                </PanelButton>
-              </div>
-            )}
-            {isGroupOpen && (
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {group.items.map(({ result, index }) => {
-                  const isExpanded = expandedIndex === index;
-                  const detail = isExpanded ? getMessageDetail(result.messageKey) : null;
-                  const severityStyle = isExpanded
-                    ? SEVERITY_STYLE_EXPANDED[result.severity]
-                    : SEVERITY_STYLE[result.severity];
 
-                  return (
-                    <li
-                      key={index}
-                      data-severity={result.severity}
-                      style={{
-                        marginBottom: spacing.sm,
-                        cursor: "pointer",
-                        borderRadius: radii.lg,
-                        overflow: "hidden",
-                        padding: "11px 14px",
-                        ...severityStyle,
-                      }}
-                      onClick={() => handleItemClick(index)}
+            {isGroupOpen && (
+              <div className="result-group__body">
+                {detail && (
+                  <dl className="result-group__explain">
+                    <div className="result-group__explain-row">
+                      <dt className="result-group__tag">影響</dt>
+                      <dd>{detail.impact}</dd>
+                    </div>
+                    <div className="result-group__explain-row">
+                      <dt className="result-group__tag result-group__tag--action">対処</dt>
+                      <dd>{detail.hint}</dd>
+                    </div>
+                  </dl>
+                )}
+                {canCleanup && onCleanupTargets && (
+                  <div className="result-group__bulk">
+                    <PanelButton
+                      size="small"
+                      disabled={actionsDisabled}
+                      onClick={() => onCleanupTargets(group.key, group.items.map((item) => item.result))}
                     >
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: spacing.md }}>
-                        <span
-                          data-testid="result-number"
-                          style={{
-                            flex: "0 0 auto",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            minWidth: "20px",
-                            height: "20px",
-                            padding: "0 5px",
-                            borderRadius: "10px",
-                            backgroundColor: "rgba(255,255,255,0.18)",
-                            color: "inherit",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            lineHeight: 1,
-                            boxSizing: "border-box",
-                          }}
-                        >
-                          {index + 1}
+                      この項目をすべて削除
+                    </PanelButton>
+                  </div>
+                )}
+                <ul className="result-items" role="listbox" aria-label={group.message}>
+                  {group.items.map(({ result, index }) => {
+                    const isSelected = localSelected === index;
+                    const variantMessage = result.message !== group.message ? result.message : "";
+                    const name = result.objectName || variantMessage;
+                    const showSelect = canSelectTarget(result) && onSelectTarget;
+                    const showDelete = hasAction(result, "delete") && onDeleteTarget;
+
+                    return (
+                      <li
+                        key={index}
+                        role="option"
+                        aria-selected={isSelected}
+                        aria-label={`${index + 1} ${name || result.message}`}
+                        data-severity={result.severity}
+                        className="result-item"
+                        tabIndex={0}
+                        onClick={() => handleItemSelect(index)}
+                        onKeyDown={(event) => {
+                          if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                            event.preventDefault();
+                            handleItemSelect(index);
+                          }
+                        }}
+                      >
+                        <span data-testid="result-number" className="result-item__number">{index + 1}</span>
+                        <span className={name ? "result-item__name" : "result-item__name result-item__name--empty"}>
+                          {result.objectName ? <span>{result.objectName}</span> : null}
+                          {!result.objectName && variantMessage ? <span>{variantMessage}</span> : null}
+                          {!name ? "名前なし" : null}
+                          {result.layerName && <span className="result-item__layer">{result.layerName}</span>}
+                          {result.objectName && variantMessage && <span className="result-item__layer">{variantMessage}</span>}
                         </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: "bold", lineHeight: "1.4" }}>
-                            {result.message}
-                          </div>
-                          {result.objectName && (
-                            <div
-                              style={{
-                                fontSize: "11px",
-                                opacity: 0.8,
-                                marginTop: "2px",
-                              }}
-                            >
-                              {result.objectName}
-                            </div>
-                          )}
-                          {(canSelectTarget(result) || hasAction(result, "delete")) && (
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: spacing.sm,
-                                marginTop: spacing.md,
-                              }}
-                            >
-                              {canSelectTarget(result) && onSelectTarget && (
-                                <PanelButton
-                                  type="button"
-                                  variant="utility"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    onSelectTarget(result);
-                                  }}
-                                >
-                                  編集画面で選択
-                                </PanelButton>
-                              )}
-                              {hasAction(result, "delete") && onDeleteTarget && (
-                                <PanelButton
-                                  type="button"
-                                  variant="utility"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    onDeleteTarget(result);
-                                  }}
-                                >
-                                  削除
-                                </PanelButton>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {isExpanded && detail && (
-                        <div
-                          style={{
-                            padding: "10px 14px",
-                            fontSize: "11px",
-                            lineHeight: "1.6",
-                            borderTop: "1px solid rgba(255,255,255,0.12)",
-                            marginTop: "8px",
-                            marginLeft: "-14px",
-                            marginRight: "-14px",
-                            marginBottom: "-11px",
-                            backgroundColor: "rgba(0, 0, 0, 0.25)",
-                            color: "inherit",
-                          }}
-                        >
-                          <p style={{ margin: "0 0 4px" }}>
-                            <strong>問題:</strong> {detail.problem}
-                          </p>
-                          <p style={{ margin: "0 0 4px" }}>
-                            <strong>印刷への影響:</strong> {detail.impact}
-                          </p>
-                          <p style={{ margin: 0 }}>
-                            <strong>改善ヒント:</strong> {detail.hint}
-                          </p>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                        {(showSelect || showDelete) && (
+                          <span className="result-item__actions">
+                            {showSelect && (
+                              <PanelButton
+                                variant="quiet"
+                                size="small"
+                                aria-label="編集画面で選択"
+                                title="Illustrator でこのオブジェクトを選択"
+                                disabled={actionsDisabled}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onSelectTarget!(result);
+                                }}
+                              >
+                                選択
+                              </PanelButton>
+                            )}
+                            {showDelete && (
+                              <PanelButton
+                                variant="danger"
+                                size="small"
+                                disabled={actionsDisabled}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onDeleteTarget!(result);
+                                }}
+                              >
+                                削除
+                              </PanelButton>
+                            )}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </li>
         );

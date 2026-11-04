@@ -76,11 +76,16 @@ vi.mock("../../src/jsx/hostscript/checks/checkBleedCoverage", () => ({
   checkBleedCoverage: vi.fn(() => []),
 }));
 
+vi.mock("../../src/jsx/hostscript/checks/checkRegistrationColor", () => ({
+  checkRegistrationColor: vi.fn(() => []),
+}));
+
 vi.mock("../../src/jsx/hostscript/checks/checkSafeZone", () => ({
   checkSafeZone: vi.fn(() => []),
 }));
 
-vi.mock("../../src/jsx/hostscript/inspector", () => ({
+vi.mock("../../src/jsx/hostscript/inspector", async () => ({
+  collectInspectionItems: vi.fn(),
   collectPathItems: vi.fn(() => []),
   collectTextFrames: vi.fn(() => []),
   collectPlacedItems: vi.fn(() => []),
@@ -92,13 +97,19 @@ describe("runner.runAll()", () => {
     vi.resetAllMocks();
     // vi.resetAllMocks() は vi.fn(() => [...]) の実装もリセットするため、
     // inspector モック関数にデフォルト戻り値（空配列）を再設定する
-    const { collectPathItems, collectTextFrames, collectPlacedItems, collectRasterItems } = await import(
+    const { collectInspectionItems, collectPathItems, collectTextFrames, collectPlacedItems, collectRasterItems } = await import(
       "../../src/jsx/hostscript/inspector"
     );
     vi.mocked(collectPathItems).mockReturnValue([]);
     vi.mocked(collectTextFrames).mockReturnValue([] as unknown as ReturnType<typeof collectTextFrames>);
     vi.mocked(collectPlacedItems).mockReturnValue([]);
     vi.mocked(collectRasterItems).mockReturnValue([]);
+    vi.mocked(collectInspectionItems).mockImplementation(() => ({
+      pathItems: collectPathItems({} as Document),
+      textFrames: collectTextFrames({} as Document),
+      placedItems: collectPlacedItems({} as Document),
+      rasterItems: collectRasterItems({} as Document),
+    }));
 
     // detectInspectionScope もリセット後に再設定する
     const { detectInspectionScope } = await import(
@@ -144,6 +155,17 @@ describe("runner.runAll()", () => {
 
     expect(Array.isArray(result.results)).toBe(true);
     expect(result.results.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("bounds を読めない対象があっても正常な対象を検査し、未検査を報告する", async () => {
+    const { collectPathItems } = await import("../../src/jsx/hostscript/inspector");
+    const { checkEmptyPaths } = await import("../../src/jsx/hostscript/checks/checkEmptyPaths");
+    const good = { geometricBounds: [10, 100, 30, 20] };
+    const bad = { get geometricBounds() { throw new Error("bounds unavailable"); } };
+    vi.mocked(collectPathItems).mockReturnValue([bad, good] as unknown as PathItem[]);
+    const result = runner.runAll({ layers: [] } as unknown as Document);
+    expect(checkEmptyPaths).toHaveBeenCalledWith([good]);
+    expect(result.results.some(r => r.messageKey === "CHECK_FAILED" && /bounds unavailable/.test(r.message))).toBe(true);
   });
 
   it("一部チェッカーが例外をスローした場合、他のチェック結果を保持し失敗チェックは CHECK_FAILED として結果に含める", async () => {
@@ -293,8 +315,32 @@ describe("runner.runAll()", () => {
 
     expect(vi.mocked(checkBleedCoverage)).toHaveBeenCalledWith(
       expect.any(Array),
-      mockScopeInfo
+      mockScopeInfo,
+      { largePrintMode: undefined }
     );
+  });
+
+  it("checkRegistrationColor がパス一覧と scopeInfo（断裁範囲）を受け取る", async () => {
+    const { checkRegistrationColor } = await import(
+      "../../src/jsx/hostscript/checks/checkRegistrationColor"
+    );
+    const { detectInspectionScope } = await import(
+      "../../src/jsx/hostscript/checks/checkTrimMarks"
+    );
+    const mockScopeInfo = {
+      bounds: [0, 297, 210, 0] as [number, number, number, number],
+      hasIncompleteMarks: false,
+    };
+    vi.mocked(detectInspectionScope).mockReturnValue(mockScopeInfo);
+    const mockDoc = {
+      layers: [{ pageItems: [], layers: [] }],
+      textFrames: [],
+      artboards: [{ artboardRect: [0, 297, 210, 0] }],
+    } as unknown as Document;
+
+    runner.runAll(mockDoc);
+
+    expect(vi.mocked(checkRegistrationColor)).toHaveBeenCalledWith(expect.any(Array), mockScopeInfo);
   });
 
   describe("runAll return shape", () => {
@@ -479,7 +525,7 @@ describe("runner.runAll()", () => {
     expect(vi.mocked(checkThinLines)).toHaveBeenCalledWith([normalPath]);
   });
 
-  it("includeGuides: true の場合、ガイド化された pathItem もパス系チェッカーに渡される", async () => {
+  it("includeGuides: true でもガイド化された pathItem は常に検査対象外", async () => {
     const { collectPathItems } = await import(
       "../../src/jsx/hostscript/inspector"
     );
@@ -505,7 +551,7 @@ describe("runner.runAll()", () => {
 
     runner.runAll(mockDoc, { includeGuides: true });
 
-    expect(vi.mocked(checkEmptyPaths)).toHaveBeenCalledWith([guidePath]);
+    expect(vi.mocked(checkEmptyPaths)).toHaveBeenCalledWith([]);
   });
 
   it("includeTrimMarkLayers: true の場合、トンボレイヤー内 pathItem もパス系チェッカーに渡される", async () => {
@@ -560,6 +606,45 @@ describe("runner.runAll()", () => {
     );
   });
 
+  describe("入稿プロファイル (colorWorkflow)", () => {
+    const mockDoc = {
+      layers: [{ pageItems: [], layers: [] }],
+      textFrames: [],
+      artboards: [{ artboardRect: [0, 297, 210, 0] }],
+      activeArtboardIndex: 0,
+    } as unknown as Document;
+
+    it("checkDocumentColor に colorWorkflow が渡される", async () => {
+      const { checkDocumentColor } = await import(
+        "../../src/jsx/hostscript/checks/checkDocumentColor"
+      );
+      runner.runAll(mockDoc, { colorWorkflow: "rgb" });
+      expect(vi.mocked(checkDocumentColor)).toHaveBeenCalledWith(expect.anything(), "rgb");
+    });
+
+    it("rgb ではインキ総量・CMYK 小数点の結果が除外され、他の結果は残る", async () => {
+      const { checkInkTotal } = await import(
+        "../../src/jsx/hostscript/checks/checkInkTotal"
+      );
+      const { checkThinLines } = await import(
+        "../../src/jsx/hostscript/checks/checkThinLines"
+      );
+      vi.mocked(checkInkTotal).mockReturnValue([
+        { severity: "WARNING", messageKey: "COLOR_INK_TOTAL_01", message: "ink" },
+        { severity: "INFO", messageKey: "COLOR_INK_DECIMAL_01", message: "decimal" },
+      ]);
+      vi.mocked(checkThinLines).mockReturnValue([
+        { severity: "WARNING", messageKey: "PATH_THIN_LINE_01", message: "thin" },
+      ]);
+
+      const rgbKeys = runner.runAll(mockDoc, { colorWorkflow: "rgb" }).results.map((r) => r.messageKey);
+      expect(rgbKeys).toEqual(["PATH_THIN_LINE_01"]);
+
+      const cmykKeys = runner.runAll(mockDoc).results.map((r) => r.messageKey);
+      expect(cmykKeys).toEqual(expect.arrayContaining(["COLOR_INK_TOTAL_01", "COLOR_INK_DECIMAL_01", "PATH_THIN_LINE_01"]));
+    });
+  });
+
   describe("checkers 呼び出し順序", () => {
     it("軽量チェッカー(checkHiddenLayers)が中量チェッカー(checkEmptyPaths)より先に呼ばれる", async () => {
       const { checkHiddenLayers } = await import(
@@ -605,15 +690,7 @@ describe("runner.runAll()", () => {
       expect(imgOrder).toBeGreaterThan(inkOrder);
     });
 
-    it("STEP_NAMES 定数が 4 エントリ以上存在し各エントリが文字列である", async () => {
-      const runnerModule = await import("../../src/jsx/hostscript/runner");
-      // STEP_NAMES は runner モジュール内部の定数。
-      // runner.ts をソースとして直接エクスポートされていないため、
-      // ソースコードの内容をチェックする代わりに runner が正常動作することを確認し、
-      // STEP_NAMES はソース検査で別途確認する。
-      // このテストは runner.ts に STEP_NAMES が追加されたあとにパスする目印として残す。
-      expect(runnerModule).toBeDefined();
-    });
+
   });
 
   it("Phase 2 チェッカーのうち 1 つが例外を投げても他のチェック結果が含まれている", async () => {

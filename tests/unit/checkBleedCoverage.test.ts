@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { checkBleedCoverage } from "../../src/jsx/hostscript/checks/checkBleedCoverage";
+import { checkBleedCoverage, type BleedCheckItem } from "../../src/jsx/hostscript/checks/checkBleedCoverage";
+import { checkSavedVersion } from "../../src/jsx/hostscript/checks/checkSavedVersion";
 import type { ScopeInfo } from "../../src/jsx/hostscript/types";
 
 // A4縦 アートボード: left=0, top=297, right=210, bottom=0 (Illustrator Y上向き座標系)
@@ -8,8 +9,45 @@ const scope: ScopeInfo = {
   hasIncompleteMarks: false,
 };
 
+function rectangle(bounds: [number, number, number, number]): BleedCheckItem {
+  const [l, t, r, b] = bounds;
+  return { typename: "PathItem", name: "rect", filled: true, closed: true, opacity: 100,
+    fillColor: { typename: "CMYKColor" }, geometricBounds: bounds,
+    pathPoints: [[l, t], [r, t], [r, b], [l, b]].map(anchor => ({ anchor, leftDirection: anchor, rightDirection: anchor })) };
+}
+
 describe("checkBleedCoverage", () => {
-  it("Test 1: 塗りありオブジェクト bounds=[0, 297, 210, 0]（アートボード内側のみ）→ WARNING（3mm に届かない）", () => {
+  it("部分区間だけを検査し、矩形の被覆を合成する", () => {
+    const target: ScopeInfo = { bounds: [0, 100, 100, 0], hasIncompleteMarks: false };
+    expect(checkBleedCoverage([rectangle([10, 100, 40, 50])], target)[0].severity).toBe("WARNING");
+    expect(target.sideCoverage?.top.intervals).toMatchObject([{ startPt: 10, endPt: 40, status: "insufficient" }]);
+    expect(target.sideCoverage?.left.status).toBe("not-applicable");
+    expect(checkBleedCoverage([rectangle([10, 100, 40, 50]), rectangle([10, 110, 40, 50])], target)).toEqual([]);
+    expect(target.sideCoverage?.top.status).toBe("satisfied");
+  });
+
+  it("default大判はINFO、explicit不足はWARNING、要求値不明と複雑形状はINFO", () => {
+    const target: ScopeInfo = { bounds: [0, 100, 100, 0], hasIncompleteMarks: false };
+    const item = rectangle([10, 100, 40, 50]);
+    expect(checkBleedCoverage([item], target, { largePrintMode: true })[0].severity).toBe("INFO");
+    target.requirementSource = "explicit";
+    target.requiredBleedPt = 50 * 72 / 25.4;
+    expect(checkBleedCoverage([item], target, { largePrintMode: true })[0].severity).toBe("WARNING");
+    target.requirementSource = "unknown";
+    expect(checkBleedCoverage([item], target)[0].severity).toBe("INFO");
+    target.requirementSource = "default";
+    item.clipping = true;
+    expect(checkBleedCoverage([item], target)[0].severity).toBe("INFO");
+    expect(target.sideCoverage?.top.status).toBe("unknown");
+  });
+
+  it("保存形式は未検証の属性を推測せず、明示アダプターだけを使う", () => {
+    const doc = { savedVersion: 2020 } as unknown as Document;
+    expect(checkSavedVersion(doc)[0].messageKey).toBe("DOCUMENT_SAVE_VERSION_UNKNOWN");
+    expect(checkSavedVersion(doc, 2020, () => ({ year: 2020, source: "document-metadata" }))).toEqual([]);
+    expect(checkSavedVersion(doc, 2020, () => ({ year: 2019, source: "document-metadata" }))[0].severity).toBe("INFO");
+  });
+  it("Test 1: 実形状を持たない塗りパスはINFOにする", () => {
     const items = [
       {
         name: "背景",
@@ -19,7 +57,7 @@ describe("checkBleedCoverage", () => {
     ];
     const results = checkBleedCoverage(items, scope);
     expect(results).toHaveLength(1);
-    expect(results[0].severity).toBe("WARNING");
+    expect(results[0].severity).toBe("INFO"); // bounds alone cannot prove the shape
     expect(results[0].messageKey).toBe("BLEED_COVERAGE_01");
     expect(results[0].targetRef).toMatchObject({
       kind: "pathItem",
@@ -29,7 +67,7 @@ describe("checkBleedCoverage", () => {
     });
   });
 
-  it("Test 2: 塗りありオブジェクト bounds=[-9, 306, 219, -9]（外側 3mm 超える）→ WARNING なし（OK）", () => {
+  it("Test 2: boundsが3mmを超えていても実形状不明ならINFO", () => {
     const items = [
       {
         name: "背景",
@@ -38,10 +76,11 @@ describe("checkBleedCoverage", () => {
       },
     ];
     const results = checkBleedCoverage(items, scope);
-    expect(results).toHaveLength(0);
+    expect(results).toHaveLength(1);
+    expect(results[0].severity).toBe("INFO");
   });
 
-  it("Test 3: 塗りありオブジェクト bounds=[-8, 305, 218, -8]（外側 3mm ≈ 8.504 未満）→ WARNING", () => {
+  it("Test 3: boundsが要求値未満でも実形状不明ならINFO", () => {
     const items = [
       {
         name: "背景",
@@ -51,7 +90,7 @@ describe("checkBleedCoverage", () => {
     ];
     const results = checkBleedCoverage(items, scope);
     expect(results).toHaveLength(1);
-    expect(results[0].severity).toBe("WARNING");
+    expect(results[0].severity).toBe("INFO");
   });
 
   it("Test 4: 塗りなし（fillColor.typename === 'NoColor'）のオブジェクト → スキップ（WARNING なし）", () => {
