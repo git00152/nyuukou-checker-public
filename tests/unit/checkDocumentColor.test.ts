@@ -33,3 +33,29 @@ describe("checkDocumentColor", () => {
     expect(results[0].messageKey).toBe("COLOR_DOC_MODE_01");
   });
 });
+
+describe("checkDocumentColor — RGB 入稿プロファイル", () => {
+  it("rgb: documentColorSpace が RGB の場合 空配列を返す（OK）", () => {
+    const results = checkDocumentColor({ documentColorSpace: "DocumentColorSpace.RGB" }, "rgb");
+    expect(results).toHaveLength(0);
+  });
+
+  it("rgb: documentColorSpace が CMYK の場合 ERROR / COLOR_DOC_MODE_RGB_01 を返す", () => {
+    const results = checkDocumentColor({ documentColorSpace: "DocumentColorSpace.CMYK" }, "rgb");
+    expect(results).toHaveLength(1);
+    expect(results[0].severity).toBe("ERROR");
+    expect(results[0].messageKey).toBe("COLOR_DOC_MODE_RGB_01");
+  });
+
+  it("rgb: documentColorSpace が undefined の場合 ERROR / COLOR_DOC_MODE_RGB_01 を返す", () => {
+    const results = checkDocumentColor({ documentColorSpace: undefined }, "rgb");
+    expect(results).toHaveLength(1);
+    expect(results[0].messageKey).toBe("COLOR_DOC_MODE_RGB_01");
+  });
+
+  it("cmyk を明示した場合は従来どおり CMYK 以外を COLOR_DOC_MODE_01 とする", () => {
+    const results = checkDocumentColor({ documentColorSpace: "DocumentColorSpace.RGB" }, "cmyk");
+    expect(results).toHaveLength(1);
+    expect(results[0].messageKey).toBe("COLOR_DOC_MODE_01");
+  });
+});

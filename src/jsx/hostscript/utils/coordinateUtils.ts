@@ -52,16 +52,18 @@ export function geometricBoundsToRect(bounds: [number, number, number, number]):
  */
 export function isOutsideBleedZone(
   itemBounds: [number, number, number, number],
-  artboardBounds: [number, number, number, number]
+  artboardBounds: [number, number, number, number],
+  requiredBleedPt: number = BLEED_PT,
 ): boolean {
   const ab = artboardRectToRect(artboardBounds);
   const item = geometricBoundsToRect(itemBounds);
 
   // bleed zone: artboard を BLEED_PT だけ外側に拡張した矩形
-  const bleedLeft = ab.left - BLEED_PT;
-  const bleedTop = ab.top + BLEED_PT;       // Y 上向き: 外側 = top が増加
-  const bleedRight = ab.right + BLEED_PT;
-  const bleedBottom = ab.bottom - BLEED_PT; // Y 上向き: 外側 = bottom が減少
+  const bleed = isFinite(requiredBleedPt) && requiredBleedPt >= 0 ? requiredBleedPt : BLEED_PT;
+  const bleedLeft = ab.left - bleed;
+  const bleedTop = ab.top + bleed;       // Y 上向き: 外側 = top が増加
+  const bleedRight = ab.right + bleed;
+  const bleedBottom = ab.bottom - bleed; // Y 上向き: 外側 = bottom が減少
 
   // アートボード各辺に「接触」しているか（オブジェクトの辺がアートボード端に達している）
   const touchesLeft = item.left <= ab.left;

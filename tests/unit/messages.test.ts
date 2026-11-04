@@ -267,3 +267,47 @@ describe("getMessageDetail", () => {
     }
   });
 });
+
+describe("getMessageDetail — 追加キー", () => {
+  for (const key of ["COLOR_REGISTRATION_01"]) {
+    it(key + " のエントリを返す（フォールバックではない）", () => {
+      const detail = getMessageDetail(key);
+      expect(detail.problem).not.toBe("問題が検出されました");
+      expect(detail.impact).toBeTruthy();
+      expect(detail.hint).toBeTruthy();
+    });
+  }
+
+  it("COLOR_UNUSED_SWATCH_01 のヒントはスウォッチパネルの「未使用項目を選択」を案内する", () => {
+    expect(getMessageDetail("COLOR_UNUSED_SWATCH_01").hint).toContain("未使用項目を選択");
+  });
+});
+
+describe("RGB 入稿プロファイルのメッセージ", () => {
+  const fallback = getMessageDetail("__UNKNOWN_KEY__");
+  for (const key of ["COLOR_DOC_MODE_RGB_01", "IMG_COLOR_SPACE_RGB_01", "IMG_COLOR_SPACE_CMYK_IN_RGB_01"]) {
+    it(`${key} の専用エントリを返す`, () => {
+      const detail = getMessageDetail(key);
+      expect(detail.problem).not.toBe(fallback.problem);
+      expect(detail.impact).toBeTruthy();
+      expect(detail.hint).toBeTruthy();
+    });
+  }
+});
+
+describe("解像度メッセージは判定しきい値と一致する", () => {
+  // checkImageResolution: ERROR < 300dpi, WARNING < 350dpi, 大判 ERROR < 200dpi
+  it("IMG_RESOLUTION_LOW_01 は 300dpi 未満を示す", () => {
+    expect(getMessageDetail("IMG_RESOLUTION_LOW_01").problem).toContain("300dpi未満");
+  });
+
+  it("IMG_RESOLUTION_WARN_01 は 300〜350dpi を示す", () => {
+    expect(getMessageDetail("IMG_RESOLUTION_WARN_01").problem).toContain("300〜350dpi");
+  });
+
+  it("IMG_RESOLUTION_LARGE_PRINT_01 は 200dpi を基準として示す", () => {
+    const detail = getMessageDetail("IMG_RESOLUTION_LARGE_PRINT_01");
+    expect(detail.hint).toContain("200dpi");
+    expect(detail.hint).not.toContain("150dpi");
+  });
+});

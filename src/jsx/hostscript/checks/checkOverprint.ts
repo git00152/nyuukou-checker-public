@@ -28,8 +28,15 @@ function isK100Black(c: unknown): boolean {
 }
 
 function isWhite(c: unknown): boolean {
-  if (!isCmyk(c)) return false;
-  return c.cyan === 0 && c.magenta === 0 && c.yellow === 0 && c.black === 0;
+  if (isCmyk(c)) {
+    return c.cyan === 0 && c.magenta === 0 && c.yellow === 0 && c.black === 0;
+  }
+  const other = c as { typename?: string; gray?: number; tint?: number } | null | undefined;
+  if (!other) return false;
+  // グレー 0% / 特色の濃度 0% も印刷上は白（紙色）として扱う
+  if (other.typename === "GrayColor") return other.gray === 0;
+  if (other.typename === "SpotColor") return other.tint === 0;
+  return false;
 }
 
 function checkColorOverprint(

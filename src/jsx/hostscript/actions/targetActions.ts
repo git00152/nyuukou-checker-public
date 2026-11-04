@@ -1,6 +1,5 @@
 import type { CheckTargetRef } from "../types";
 import { collectPathItems, collectPlacedItems, collectRasterItems, collectTextFrames } from "../inspector";
-import { collectUsedSpotNames, DocumentForSwatches, SYSTEM_SWATCH_NAMES } from "../checks/checkUnusedSwatches";
 import { createImageItemSignature, createPathItemSignature, createTextFrameSignature, getPathItemLayerName, getPathPointCount, toBounds } from "../checks/targetRef";
 
 export type TargetActionReason =
@@ -181,27 +180,6 @@ function findImageItem(doc: Document, ref: CheckTargetRef): { item?: ImageItemAc
   return { item: matches[0] };
 }
 
-function findSwatch(doc: Document, ref: CheckTargetRef): { swatch?: { name: string; remove?: () => void }; reason?: TargetActionReason } {
-  if (ref.kind !== "swatch") return { reason: "UNSUPPORTED_TARGET" };
-  if (!ref.swatchName || !ref.messageKey) return { reason: "INVALID_TARGET_REF" };
-  var swatches = (doc as unknown as DocumentForSwatches).swatches;
-  if (!swatches) return { reason: "NOT_FOUND" };
-  var found: Array<{ name: string; remove?: () => void }> = [];
-  for (var i = 0; i < swatches.length; i++) {
-    if (swatches[i].name === ref.swatchName) {
-      found.push(swatches[i] as unknown as { name: string; remove?: () => void });
-    }
-  }
-  if (found.length === 0) return { reason: "NOT_FOUND" };
-  if (found.length > 1) return { reason: "AMBIGUOUS" };
-  return { swatch: found[0] };
-}
-
-function isUnusedSwatch(doc: Document, swatchName: string): boolean {
-  var used = collectUsedSpotNames(doc as unknown as DocumentForSwatches);
-  return used[swatchName] !== true;
-}
-
 export function selectCheckTarget(targetRef: CheckTargetRef): TargetActionResult {
   var doc = getActiveDocument();
   if (!doc) return { ok: false, reason: "NO_DOCUMENT" };
@@ -262,21 +240,8 @@ export function deleteCheckTarget(targetRef: CheckTargetRef): TargetActionResult
     }
   }
 
-  if (targetRef.kind === "swatch" && targetRef.messageKey === "COLOR_UNUSED_SWATCH_01") {
-    if (!targetRef.swatchName) return { ok: false, reason: "INVALID_TARGET_REF", deletedCount: 0, failedCount: 1 };
-    if (SYSTEM_SWATCH_NAMES[targetRef.swatchName]) return { ok: false, reason: "SYSTEM_SWATCH", deletedCount: 0, failedCount: 1 };
-    var foundSwatch = findSwatch(doc, targetRef);
-    if (!foundSwatch.swatch) return { ok: false, reason: foundSwatch.reason || "NOT_FOUND", deletedCount: 0, failedCount: 1 };
-    if (!isUnusedSwatch(doc, targetRef.swatchName)) return { ok: false, reason: "STILL_IN_USE", deletedCount: 0, failedCount: 1 };
-    try {
-      if (typeof foundSwatch.swatch.remove !== "function") return { ok: false, reason: "REMOVE_FAILED", deletedCount: 0, failedCount: 1 };
-      foundSwatch.swatch.remove();
-      return { ok: true, deletedCount: 1, failedCount: 0 };
-    } catch (e) {
-      return { ok: false, reason: "REMOVE_FAILED", deletedCount: 0, failedCount: 1 };
-    }
-  }
-
+  // スウォッチ削除は提供しない。アピアランスの追加塗り・パターン・シンボル内の特色使用は
+  // API で判定できず、使用中の特色を削除するとプロセスカラーに変換されるため。
   return { ok: false, reason: "UNSUPPORTED_TARGET", deletedCount: 0, failedCount: 1 };
 }
 

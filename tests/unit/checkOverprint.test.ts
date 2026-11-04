@@ -152,3 +152,27 @@ describe("checkOverprint", () => {
     expect(results).toHaveLength(0);
   });
 });
+
+describe("checkOverprint — 白の判定", () => {
+  it("グレー 0% の白にオーバープリントが設定されている場合も COLOR_OVERPRINT_WHITE_01", () => {
+    const results = checkOverprint([{
+      name: "white-gray",
+      fillColor: { typename: "GrayColor", gray: 0 },
+      strokeColor: { typename: "NoColor" },
+      fillOverprint: true,
+      strokeOverprint: false,
+    }]);
+    expect(results.map((r) => r.messageKey)).toEqual(["COLOR_OVERPRINT_WHITE_01"]);
+  });
+
+  it("特色の濃度 0% にオーバープリントが設定されている場合も COLOR_OVERPRINT_WHITE_01", () => {
+    const results = checkOverprint([{
+      name: "white-spot",
+      fillColor: { typename: "SpotColor", tint: 0, spot: { name: "DIC 1" } },
+      strokeColor: { typename: "NoColor" },
+      fillOverprint: true,
+      strokeOverprint: false,
+    }]);
+    expect(results.map((r) => r.messageKey)).toEqual(["COLOR_OVERPRINT_WHITE_01"]);
+  });
+});

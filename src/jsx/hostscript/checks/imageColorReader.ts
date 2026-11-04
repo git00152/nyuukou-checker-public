@@ -523,8 +523,9 @@ export function readLinkedImageColorMode(fsName: string): string | null {
       return readEPSColorMode(fsName);
     }
 
+    // PNG uses its IHDR; it may be grayscale or monochrome.
     // XMP メタデータを最優先（PSD/PSB は photoshop:ColorMode が最も確実）
-    var xmpMode = readColorModeFromXMP(fsName);
+    var xmpMode = /\.png$/i.test(lowerName) ? null : readColorModeFromXMP(fsName);
     if (xmpMode) return xmpMode;
 
     // JPEG: サンプルスクリプトと同じストリーム解析方式（readJPEGColorMode）を使用
@@ -550,13 +551,15 @@ export function readLinkedImageColorMode(fsName: string): string | null {
 
     var bytes = "";
     var byteCount = 0;
-    while (!f.eof && byteCount < MAX_BYTES) {
+    var headerLimit = /\.(png|psd|psb)$/i.test(lowerName) ? 26 : MAX_BYTES;
+    while (!f.eof && byteCount < headerLimit) {
       bytes += f.readch();
       byteCount++;
     }
     try { f.close(); } catch (_) { /* ignore */ }
     f = null;
 
+    if (/\.png$/i.test(lowerName)) return parseColorModeFromPNG(bytes);
     if (/\.ps[db]$/i.test(lowerName)) return parseColorModeFromPSD(bytes); // PSD + PSB
     if (/\.tiff?$/i.test(lowerName)) return parseColorModeFromTIFF(bytes);
     return null;

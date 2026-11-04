@@ -179,3 +179,12 @@ describe("checkHiddenObjects", () => {
     expect(results[0].bounds).toEqual([0, 100, 100, 0]);
   });
 });
+
+it("グループ内の非表示オブジェクトも一度だけ検出する", () => {
+  const item = { typename: "PathItem", uuid: "hidden", hidden: true, name: "nested", geometricBounds: [0, 10, 10, 0] };
+  const group = { typename: "GroupItem", pageItems: [item], uuid: "group" };
+  const doc = { layers: [{ name: "Layer", pageItems: [group, item], layers: [] }] } as unknown as Document;
+  const results = checkHiddenObjects(doc);
+  expect(results).toHaveLength(1);
+  expect(results[0].objectName).toBe("nested");
+});

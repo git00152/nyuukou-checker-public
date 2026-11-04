@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CheckResult, ScopeInfo } from "../../../jsx/hostscript/types";
 import { ilBoundsToSvgRect } from "../utils/svgCoordinates";
-import { colors, shadows, spacing } from "../styles/tokens";
 import { PreviewToolbar } from "./PreviewToolbar";
 import { SVGPreview } from "./SVGPreview";
 
@@ -145,17 +144,7 @@ export const PreviewViewport: React.FC<PreviewViewportProps> = ({
   }, [changeZoom, resetZoom]);
 
   return (
-    <div
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        height: "100%",
-        minHeight: 0,
-        background: colors.previewBg,
-      }}
-    >
+    <div className="preview">
       <PreviewToolbar
         zoomPercent={Math.round(zoom * 100)}
         hasSelection={selectedIndex !== null}
@@ -168,24 +157,19 @@ export const PreviewViewport: React.FC<PreviewViewportProps> = ({
       <div
         ref={scrollRef}
         data-testid="preview-scroll-area"
+        className="preview__scroll"
         tabIndex={0}
+        aria-label="アートボードのプレビュー"
         onKeyDown={handleKeyDown}
-        style={{
-          flex: 1,
-          overflow: "auto",
-          padding: spacing.xxl,
-          outline: "none",
-        }}
       >
         <div
           data-testid="preview-zoom-surface"
+          className={scopeInfo ? "preview__surface" : "preview__surface preview__surface--empty"}
           style={{
-            width: `${surfaceWidth}px`,
-            height: `${surfaceHeight}px`,
-            aspectRatio: `${boundsSize.width} / ${boundsSize.height}`,
-            margin: "0 auto",
-            boxShadow: shadows.artboard,
-            background: colors.artboardBg,
+            // 未チェック時は白いアートボードを出さず、キャンバス上に案内だけを置く
+            width: scopeInfo ? `${surfaceWidth}px` : "100%",
+            height: scopeInfo ? `${surfaceHeight}px` : "100%",
+            aspectRatio: scopeInfo ? `${boundsSize.width} / ${boundsSize.height}` : undefined,
           }}
         >
           <SVGPreview

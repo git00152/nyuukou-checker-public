@@ -126,33 +126,8 @@ export const SVGPreview: React.FC<SVGPreviewProps> = ({
   // チェック中: スピナー表示
   if (status === "checking") {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          minHeight: "120px",
-          background: colors.artboardBg,
-        }}
-      >
-        <div
-          data-testid="spinner"
-          style={{
-            width: "32px",
-            height: "32px",
-            border: `3px solid ${colors.text}`,
-            borderTop: `3px solid ${colors.infoStrong}`,
-            borderRadius: "50%",
-            animation: "svgpreview-spin 0.8s linear infinite",
-          }}
-        />
-        <style>{`
-          @keyframes svgpreview-spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div className="preview__placeholder" role="status" aria-label="チェック中">
+        <div data-testid="spinner" className="preview__spinner" />
       </div>
     );
   }
@@ -160,21 +135,8 @@ export const SVGPreview: React.FC<SVGPreviewProps> = ({
   // scopeInfo が null: プレースホルダー表示
   if (!scopeInfo) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          minHeight: "80px",
-          color: "#a0aec0",
-          fontSize: "12px",
-          background: "#f7fafc",
-          borderRadius: "4px",
-        }}
-      >
-        アートボード情報なし
+      <div className="preview__placeholder">
+        アートボードをチェックすると、検出した位置をここに表示します
       </div>
     );
   }
@@ -184,24 +146,8 @@ export const SVGPreview: React.FC<SVGPreviewProps> = ({
   const boundsH = Math.abs(scopeInfo.bounds[1] - scopeInfo.bounds[3]);
   if (boundsW === 0 || boundsH === 0) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          minHeight: "80px",
-          color: colors.errorStrong,
-          fontSize: "12px",
-          background: "#fff5f5",
-          borderRadius: "4px",
-          padding: "8px",
-          boxSizing: "border-box",
-          wordBreak: "break-all",
-        }}
-      >
-        アートボードのサイズが不正です
+      <div className="preview__placeholder">
+        アートボードのサイズを取得できませんでした
       </div>
     );
   }

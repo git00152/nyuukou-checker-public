@@ -1,6 +1,11 @@
-// inspector.ts — レイヤースコープ再帰走査
-// doc.pageItems 直接使用禁止（Pitfall 6: O(n²) 問題）
-// layer.pageItems ベースの再帰走査を使用する
+// Shared layer/group traversal; collection order is preserved for target references.
+import { overlapsArtboard } from "./utils/coordinateUtils";
+
+export type InspectionBounds = [number, number, number, number];
+
+export interface VisitDocumentItemsOptions {
+  bounds?: InspectionBounds;
+}
 
 /** PlacedItem（リンク画像・埋め込み配置）の Like 型 */
 export interface PlacedItemLike {
@@ -25,193 +30,106 @@ export interface RasterItemLike {
   resolution?: { horizontal: number; vertical: number };
 }
 
-function pushUnique<T>(results: T[], item: T): void {
-  for (let i = 0; i < results.length; i++) {
-    if (results[i] === item) return;
+/** Visit each item once, including nested groups and compound subpaths. */
+export function visitDocumentItems(
+  doc: Document,
+  visit: (item: PageItem, layer: Layer) => void,
+  options?: VisitDocumentItemsOptions,
+): void {
+  var seenIds: { [key: string]: boolean } = {};
+  var withoutId: PageItem[] = [];
+
+  function itemIntersectsScope(item: PageItem): boolean {
+    if (!options || !options.bounds) return true;
+    try {
+      var gb = (item as unknown as { geometricBounds?: [number, number, number, number] }).geometricBounds;
+      if (!gb || gb.length < 4) return true;
+      return overlapsArtboard([gb[0], gb[1], gb[2], gb[3]], options.bounds);
+    } catch (_) {
+      // Unknown bounds must not prune a group; a nested item may still be relevant.
+      return true;
+    }
   }
-  results.push(item);
+
+  function visitItems(items: { length: number; [index: number]: PageItem }, layer: Layer): void {
+    var count = items.length;
+    for (var i = 0; i < count; i++) {
+      var item = items[i];
+      var uuid = "";
+      try { uuid = (item as unknown as { uuid?: string }).uuid || ""; } catch (_) { /* optional */ }
+      if (uuid) {
+        var key = "$" + uuid;
+        if (seenIds[key]) continue;
+        seenIds[key] = true;
+      } else {
+        var found = false;
+        for (var j = 0; j < withoutId.length; j++) {
+          if (withoutId[j] === item) { found = true; break; }
+        }
+        if (found) continue;
+        withoutId.push(item);
+      }
+      if (itemIntersectsScope(item)) visit(item, layer);
+      if (item.typename === "GroupItem") {
+        if (itemIntersectsScope(item)) visitItems((item as GroupItem).pageItems, layer);
+      } else if (item.typename === "CompoundPathItem") {
+        if (itemIntersectsScope(item)) visitItems((item as CompoundPathItem).pathItems, layer);
+      }
+    }
+  }
+
+  function visitLayers(layers: { length: number; [index: number]: Layer }): void {
+    var count = layers.length;
+    for (var i = 0; i < count; i++) {
+      var layer = layers[i];
+      visitItems(layer.pageItems, layer);
+      if (layer.layers) visitLayers(layer.layers);
+    }
+  }
+  visitLayers(doc.layers);
 }
 
-/**
- * doc.layers を再帰走査して全 PathItem を収集する
- * グループ内のアイテムも再帰的に収集する
- */
+export interface InspectionItems {
+  pathItems: PathItem[];
+  textFrames: TextFrame[];
+  placedItems: PlacedItemLike[];
+  rasterItems: RasterItemLike[];
+}
+
+/** Collect all checker inputs in one DOM traversal. */
+export function collectInspectionItems(doc: Document, bounds?: InspectionBounds): InspectionItems {
+  var collected: InspectionItems = { pathItems: [], textFrames: [], placedItems: [], rasterItems: [] };
+  // ExtendScript (ES3) 互換: 条件演算子の真側にオブジェクトリテラルを書くと
+  // 読み込み時に「SyntaxError: 予期された結果: :」になるため if 文で組み立てる。
+  var visitOptions: { bounds: InspectionBounds } | undefined = undefined;
+  if (bounds) visitOptions = { bounds: bounds };
+  visitDocumentItems(doc, function (item) {
+    switch (item.typename) {
+      case "PathItem": collected.pathItems.push(item as PathItem); break;
+      case "TextFrame": collected.textFrames.push(item as unknown as TextFrame); break;
+      case "PlacedItem": collected.placedItems.push(item as unknown as PlacedItemLike); break;
+      case "RasterItem": collected.rasterItems.push(item as unknown as RasterItemLike); break;
+    }
+  }, visitOptions);
+  return collected;
+}
+
+export function collectInspectionItemsForArtboard(doc: Document, bounds: InspectionBounds): InspectionItems {
+  return collectInspectionItems(doc, bounds);
+}
+
 export function collectPathItems(doc: Document): PathItem[] {
-  const results: PathItem[] = [];
-
-  // CompoundPathItem の子 PathItem を収集する
-  // CompoundPathItem 自体は stroked/strokeWidth を持たない（Adobe API 仕様）
-  // 実際のストローク情報は pathItems コレクション内の子 PathItem が持つ
-  function collectFromCompoundPath(cpi: CompoundPathItem): void {
-    const cpiItems = (cpi as unknown as { pathItems: { [key: number]: PathItem; length: number } }).pathItems;
-    for (let j = 0; j < cpiItems.length; j++) {
-      pushUnique(results, cpiItems[j]);
-    }
-  }
-
-  function collectFromGroup(group: GroupItem): void {
-    const items = group.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "PathItem") {
-        pushUnique(results, item as PathItem);
-      } else if (item.typename === "CompoundPathItem") {
-        collectFromCompoundPath(item as CompoundPathItem);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-  }
-
-  function collectFromLayer(layer: Layer): void {
-    const items = layer.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "PathItem") {
-        pushUnique(results, item as PathItem);
-      } else if (item.typename === "CompoundPathItem") {
-        collectFromCompoundPath(item as CompoundPathItem);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-    // サブレイヤーを再帰処理
-    for (let i = 0; i < layer.layers.length; i++) {
-      collectFromLayer(layer.layers[i]);
-    }
-  }
-
-  for (let i = 0; i < doc.layers.length; i++) {
-    collectFromLayer(doc.layers[i]);
-  }
-
-  return results;
+  return collectInspectionItems(doc).pathItems;
 }
 
-/**
- * doc.layers を再帰走査して全 TextFrame を収集する
- * グループ内のアイテムも再帰的に収集する
- */
 export function collectTextFrames(doc: Document): TextFrame[] {
-  const results: TextFrame[] = [];
-
-  function collectFromGroup(group: GroupItem): void {
-    const items = group.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "TextFrame") {
-        pushUnique(results, item as unknown as TextFrame);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-  }
-
-  function collectFromLayer(layer: Layer): void {
-    const items = layer.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "TextFrame") {
-        pushUnique(results, item as unknown as TextFrame);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-    // サブレイヤーを再帰処理
-    for (let i = 0; i < layer.layers.length; i++) {
-      collectFromLayer(layer.layers[i]);
-    }
-  }
-
-  for (let i = 0; i < doc.layers.length; i++) {
-    collectFromLayer(doc.layers[i]);
-  }
-
-  return results;
+  return collectInspectionItems(doc).textFrames;
 }
 
-/**
- * doc.layers を再帰走査して全 PlacedItem を収集する
- * グループ内・サブレイヤー内のアイテムも再帰的に収集する
- * PlacedItem = リンク画像・埋め込み配置オブジェクト
- */
 export function collectPlacedItems(doc: Document): PlacedItemLike[] {
-  const results: PlacedItemLike[] = [];
-
-  function collectFromGroup(group: GroupItem): void {
-    const items = group.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "PlacedItem") {
-        pushUnique(results, item as unknown as PlacedItemLike);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-  }
-
-  function collectFromLayer(layer: Layer): void {
-    const items = layer.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "PlacedItem") {
-        pushUnique(results, item as unknown as PlacedItemLike);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-    // サブレイヤーを再帰処理
-    for (let i = 0; i < layer.layers.length; i++) {
-      collectFromLayer(layer.layers[i]);
-    }
-  }
-
-  for (let i = 0; i < doc.layers.length; i++) {
-    collectFromLayer(doc.layers[i]);
-  }
-
-  return results;
+  return collectInspectionItems(doc).placedItems;
 }
 
-/**
- * doc.layers を再帰走査して全 RasterItem を収集する
- * グループ内・サブレイヤー内のアイテムも再帰的に収集する
- * RasterItem = 埋め込みラスタ画像オブジェクト
- */
 export function collectRasterItems(doc: Document): RasterItemLike[] {
-  const results: RasterItemLike[] = [];
-
-  function collectFromGroup(group: GroupItem): void {
-    const items = group.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "RasterItem") {
-        pushUnique(results, item as unknown as RasterItemLike);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-  }
-
-  function collectFromLayer(layer: Layer): void {
-    const items = layer.pageItems;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.typename === "RasterItem") {
-        pushUnique(results, item as unknown as RasterItemLike);
-      } else if (item.typename === "GroupItem") {
-        collectFromGroup(item as GroupItem);
-      }
-    }
-    // サブレイヤーを再帰処理
-    for (let i = 0; i < layer.layers.length; i++) {
-      collectFromLayer(layer.layers[i]);
-    }
-  }
-
-  for (let i = 0; i < doc.layers.length; i++) {
-    collectFromLayer(doc.layers[i]);
-  }
-
-  return results;
+  return collectInspectionItems(doc).rasterItems;
 }

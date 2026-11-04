@@ -156,25 +156,18 @@ describe("checkImageResolution — IMG-05: カラーモード", () => {
   });
 });
 
-describe("checkImageResolution — PNG 拡張子による即時 RGB 検出", () => {
-  it("EXT-1: fsName が .png の PlacedItem → _colorReader なしでも ERROR IMG_COLOR_SPACE_01", () => {
-    const item = makePlacedItem({
-      imageColorSpace: undefined,
-      file: { fsName: "/path/to/image.png" },
-    });
-    const results = checkImageResolution([item]); // _colorReader 未指定
-    const errors = results.filter((r) => r.severity === "ERROR" && r.messageKey === "IMG_COLOR_SPACE_01");
-    expect(errors).toHaveLength(1);
+describe("checkImageResolution — PNG ヘッダ判定への受け渡し", () => {
+  it("PNG は reader 未指定なら手動確認", () => {
+    const results = checkImageResolution([makePlacedItem({ file: { fsName: "/gray.png" } })]);
+    expect(results.some(r => r.messageKey === "IMG_COLOR_SPACE_MANUAL_01")).toBe(true);
+    expect(results.some(r => r.messageKey === "IMG_COLOR_SPACE_01")).toBe(false);
   });
 
-  it("EXT-2: fsName が .PNG（大文字）の PlacedItem → ERROR IMG_COLOR_SPACE_01", () => {
-    const item = makePlacedItem({
-      imageColorSpace: undefined,
-      file: { fsName: "/path/to/IMAGE.PNG" },
-    });
-    const results = checkImageResolution([item]);
-    const errors = results.filter((r) => r.severity === "ERROR" && r.messageKey === "IMG_COLOR_SPACE_01");
-    expect(errors).toHaveLength(1);
+  it.each(["Grayscale", "Bitmap", "RGB"])("PNG の %s 判定を使用する", (mode) => {
+    const reader = vi.fn(() => mode);
+    const results = checkImageResolution([makePlacedItem({ file: { fsName: "/image.PNG" } })], {}, undefined, reader);
+    expect(reader).toHaveBeenCalledWith("/image.PNG");
+    expect(results.some(r => r.messageKey === "IMG_COLOR_SPACE_01")).toBe(mode === "RGB");
   });
 
   it("EXT-3: fsName が .jpg の PlacedItem → _colorReader なしなら INFO（ファイル読み取りが必要）", () => {
@@ -270,8 +263,7 @@ describe("checkImageResolution — Bug1: _colorReader 注入によるリンク�
   });
 
   it("CR-8: _colorReader の第一引数に fsName が渡される (非PNG)", () => {
-    // PNG は拡張子だけで RGB 判定されるため _colorReader が呼ばれない。
-    // 非PNG ファイルで _colorReader への fsName 受け渡しを検証する。
+    // ファイルパスをヘッダ判定へ渡す。
     const item = makePlacedItem({
       imageColorSpace: undefined,
       file: { fsName: "/actual/path/image.jpg" },
@@ -301,6 +293,19 @@ describe("checkImageResolution — バグ修正: 空のファイル名表示", (
     expect(infos[0].message).toMatch(/image\.tif|image/);
   });
 
+  it("Windows形式の fsName からもベース名を取得する", () => {
+    const item: ImageItem = {
+      typename: "PlacedItem",
+      name: "",
+      file: { fsName: "C:\\path\\to\\image.tif" },
+      geometricBounds: [0, 100, 100, 0],
+    };
+
+    const results = checkImageResolution([item]);
+    const info = results.find((result) => result.messageKey === "IMG_RESOLUTION_UNKNOWN_01");
+    expect(info?.message).toContain('"image.tif (リンク)"');
+  });
+
   it("Test 14: item.name が空文字列かつ file も undefined のとき、(不明) フォールバックが表示される", () => {
     const item: ImageItem = {
       typename: "PlacedItem",
@@ -318,7 +323,7 @@ describe("checkImageResolution — バグ修正: 空のファイル名表示", (
   });
 });
 
-describe("checkImageResolution — PlacedItem matrix から DPI 算出（実装必須）", () => {
+describe("checkImageResolution — PlacedItem matrix から DPI 算出", () => {
   it("Test P1: 400 DPI のリンク画像 (mValueA=72/400=0.18) → DPI 警告なし", () => {
     const item = makePlacedItem({ matrix: { mValueA: 72 / 400, mValueD: 72 / 400 } });
     const results = checkImageResolution([item]);
@@ -400,7 +405,7 @@ describe("checkImageResolution — PlacedItem matrix から DPI 算出（実装�
   });
 });
 
-describe("checkImageResolution — RasterItem resolution から DPI 算出（実装必須）", () => {
+describe("checkImageResolution — RasterItem resolution から DPI 算出", () => {
   it("Test R1: 350 DPI の埋め込み画像 ({horizontal,vertical} 形式) → DPI 警告なし", () => {
     const item: ImageItem = { ...makeRasterItem(), resolution: { horizontal: 350, vertical: 350 } };
     const results = checkImageResolution([item]);
@@ -456,7 +461,7 @@ describe("checkImageResolution — RasterItem resolution から DPI 算出（実
     expect(errors[0].message).toMatch(/150/);
   });
 
-  // Illustrator の ExtendScript API では RasterItem.resolution は単一数値 (DPI)
+  // resolution が提供される場合の単一数値 (DPI) も受け付ける
   it("Test R4: 350 DPI の埋め込み画像 (number 形式 = Illustrator API 実態) → DPI 警告なし", () => {
     const item: ImageItem = { ...makeRasterItem(), resolution: 350 as unknown as { horizontal: number; vertical: number } };
     const results = checkImageResolution([item]);
@@ -571,5 +576,129 @@ describe("checkImageResolution — IMG-01/02/03: DPI チェック（dpiOverride 
     const results = checkImageResolution([item], { largePrintMode: true }, { "large-low.tif": 190 });
     const errors = results.filter((r) => r.severity === "ERROR" && r.messageKey === "IMG_RESOLUTION_LOW_01");
     expect(errors).toHaveLength(1);
+  });
+});
+
+
+describe("画像判定の回帰", () => {
+  it("File オブジェクトがあっても exists=false ならリンク切れ", () => {
+    const reader = vi.fn();
+    const results = checkImageResolution([makePlacedItem({ file: { fsName: "/missing.tif", exists: false } })], {}, undefined, reader);
+    expect(results.map(r => r.messageKey)).toEqual(["IMG_LINK_BROKEN_01"]);
+    expect(reader).not.toHaveBeenCalled();
+  });
+  it("同じリンクは検査ごとに一度だけ読み、次回には再取得する", () => {
+    const reader = vi.fn(() => "CMYK");
+    const items = [makePlacedItem(), makePlacedItem({ name: "copy" })];
+    checkImageResolution(items, {}, undefined, reader);
+    expect(reader).toHaveBeenCalledTimes(1);
+    checkImageResolution(items, {}, undefined, reader);
+    expect(reader).toHaveBeenCalledTimes(2);
+  });
+  it("1つのファイルが読めなくても次の画像を検査する", () => {
+    const reader = vi.fn().mockImplementationOnce(() => { throw new Error("read failed"); }).mockReturnValue("RGB");
+    const results = checkImageResolution([makePlacedItem(), makePlacedItem({ file: { fsName: "/next.png" } })], {}, undefined, reader);
+    expect(results.some(r => r.messageKey === "IMG_COLOR_SPACE_MANUAL_01")).toBe(true);
+    expect(results.some(r => r.messageKey === "IMG_COLOR_SPACE_01")).toBe(true);
+  });
+  it.each([199.99, 299.99, 349.99])("%s dpi を丸めて閾値を超えさせない", (dpi) => {
+    const item = makePlacedItem({ matrix: { mValueA: 72 / dpi, mValueD: 72 / dpi } });
+    const results = checkImageResolution([item], { largePrintMode: dpi < 200 });
+    expect(results.find(r => /IMG_RESOLUTION_(LOW|WARN)_01/.test(r.messageKey))?.severity).toBe(dpi < 300 ? "ERROR" : "WARNING");
+  });
+  it("不均等に拡縮して45度回転した画像は低い方の解像度で判定する", () => {
+    const c = Math.SQRT1_2;
+    const item = makePlacedItem({ matrix: { mValueA: 0.3*c, mValueB: 0.3*c, mValueC: -0.1*c, mValueD: 0.1*c } });
+    expect(checkImageResolution([item]).some(r => r.messageKey === "IMG_RESOLUTION_LOW_01")).toBe(true);
+  });
+  it.each([NaN, Infinity, 0, -1])("無効な解像度 %s を合格にしない", (resolution) => {
+    expect(checkImageResolution([makeRasterItem({ resolution })]).some(r => r.messageKey === "IMG_RESOLUTION_UNKNOWN_01")).toBe(true);
+  });
+});
+
+
+it.each(["ai", "pdf", "eps", "svg"])("ベクターを含む配置%sは行列だけで低解像度にしない", (extension) => {
+  const results = checkImageResolution([makePlacedItem({ file: { fsName: "/linked." + extension } })]);
+  expect(results.some(r => r.messageKey === "IMG_RESOLUTION_LOW_01")).toBe(false);
+  expect(results.some(r => r.messageKey === "IMG_RESOLUTION_UNKNOWN_01")).toBe(true);
+});
+
+it("300dpi を回転した際の浮動小数点誤差で ERROR にしない", () => {
+  const s = 72 / 300 * Math.SQRT1_2;
+  const results = checkImageResolution([makePlacedItem({ matrix: { mValueA: s, mValueB: s, mValueC: -s, mValueD: s } })]);
+  expect(results.some(r => r.messageKey === "IMG_RESOLUTION_LOW_01")).toBe(false);
+  expect(results.some(r => r.messageKey === "IMG_RESOLUTION_WARN_01")).toBe(true);
+});
+
+describe("checkImageResolution — RGB 入稿プロファイル: カラーモード", () => {
+  const rgb = { colorWorkflow: "rgb" as const };
+  const colorKeys = ["IMG_COLOR_SPACE_01", "IMG_COLOR_SPACE_RGB_01", "IMG_COLOR_SPACE_CMYK_IN_RGB_01"];
+  const colorResults = (results: ReturnType<typeof checkImageResolution>) =>
+    results.filter((r) => colorKeys.indexOf(r.messageKey) !== -1);
+
+  it("RGB-1: RasterItem が RGB → カラーモードの指摘なし", () => {
+    const results = checkImageResolution([makeRasterItem({ imageColorSpace: "ImageColorSpace.RGB" })], rgb);
+    expect(colorResults(results)).toHaveLength(0);
+  });
+
+  it("RGB-2: RasterItem が Grayscale → カラーモードの指摘なし", () => {
+    const results = checkImageResolution([makeRasterItem({ imageColorSpace: "ImageColorSpace.Grayscale" })], rgb);
+    expect(colorResults(results)).toHaveLength(0);
+  });
+
+  it("RGB-3: RasterItem が CMYK → WARNING IMG_COLOR_SPACE_CMYK_IN_RGB_01", () => {
+    const results = checkImageResolution([makeRasterItem({ imageColorSpace: "ImageColorSpace.CMYK" })], rgb);
+    const found = colorResults(results);
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("WARNING");
+    expect(found[0].messageKey).toBe("IMG_COLOR_SPACE_CMYK_IN_RGB_01");
+    expect(found[0].targetRef).toBeDefined();
+  });
+
+  it("RGB-4: RasterItem が Indexed → ERROR IMG_COLOR_SPACE_RGB_01", () => {
+    const results = checkImageResolution([makeRasterItem({ imageColorSpace: "ImageColorSpace.Indexed" })], rgb);
+    const found = colorResults(results);
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("ERROR");
+    expect(found[0].messageKey).toBe("IMG_COLOR_SPACE_RGB_01");
+  });
+
+  it("RGB-5: PNG リンク画像 → カラーモードの指摘なし", () => {
+    const item = makePlacedItem({ imageColorSpace: undefined, file: { fsName: "/path/to/image.png" } });
+    expect(colorResults(checkImageResolution([item], rgb))).toHaveLength(0);
+  });
+
+  it("RGB-6: _colorReader が RGB / Grayscale / Bitmap を返す → カラーモードの指摘なし", () => {
+    for (const mode of ["RGB", "Grayscale", "Bitmap"]) {
+      const item = makePlacedItem({ imageColorSpace: undefined, file: { fsName: "/path/to/a.psd" } });
+      expect(colorResults(checkImageResolution([item], rgb, undefined, () => mode))).toHaveLength(0);
+    }
+  });
+
+  it("RGB-7: _colorReader が CMYK を返す → WARNING IMG_COLOR_SPACE_CMYK_IN_RGB_01", () => {
+    const item = makePlacedItem({ imageColorSpace: undefined, file: { fsName: "/path/to/a.tif" } });
+    const found = colorResults(checkImageResolution([item], rgb, undefined, () => "CMYK"));
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("WARNING");
+    expect(found[0].messageKey).toBe("IMG_COLOR_SPACE_CMYK_IN_RGB_01");
+  });
+
+  it("RGB-8: _colorReader が Lab を返す → ERROR IMG_COLOR_SPACE_RGB_01", () => {
+    const item = makePlacedItem({ imageColorSpace: undefined, file: { fsName: "/path/to/a.psd" } });
+    const found = colorResults(checkImageResolution([item], rgb, undefined, () => "Lab"));
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("ERROR");
+    expect(found[0].messageKey).toBe("IMG_COLOR_SPACE_RGB_01");
+  });
+
+  it("RGB-9: 判定できないリンク画像は従来どおり INFO IMG_COLOR_SPACE_MANUAL_01", () => {
+    const item = makePlacedItem({ imageColorSpace: undefined, file: { fsName: "/path/to/a.jpg" } });
+    const results = checkImageResolution([item], rgb, undefined, () => null);
+    expect(results.filter((r) => r.messageKey === "IMG_COLOR_SPACE_MANUAL_01")).toHaveLength(1);
+  });
+
+  it("RGB-10: 解像度判定はプロファイルに関係なく同じ", () => {
+    const results = checkImageResolution([makeRasterItem({ imageColorSpace: "ImageColorSpace.RGB", name: "low" })], rgb, { low: 280 });
+    expect(results.filter((r) => r.messageKey === "IMG_RESOLUTION_LOW_01")).toHaveLength(1);
   });
 });

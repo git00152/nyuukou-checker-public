@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  readLinkedImageColorMode,
   parseColorModeFromPNG,
   parseColorModeFromJPEG,
   parseColorModeFromPSD,
@@ -346,4 +347,21 @@ describe("parseColorModeFromEPS", () => {
     const text = "%!PS-Adobe-3.0\r\n%%ImageData: 100 100 8 4\r\n%%EndComments\r\n";
     expect(parseColorModeFromEPS(text)).toBe("CMYK");
   });
+});
+
+
+it("PNG の実ファイル読み取り経路は26バイトのIHDRで判定して閉じる", () => {
+  const oldFile = globalThis.File;
+  const bytes = makePNGBytes(0);
+  let offset = 0;
+  let closed = false;
+  globalThis.File = function () {
+    return { open: () => true, encoding: "", eof: false,
+      readch: () => bytes[offset++], close: () => { closed = true; } };
+  } as unknown as typeof File;
+  try {
+    expect(readLinkedImageColorMode("/fixture.PNG")).toBe("Grayscale");
+    expect(offset).toBe(26);
+    expect(closed).toBe(true);
+  } finally { globalThis.File = oldFile; }
 });

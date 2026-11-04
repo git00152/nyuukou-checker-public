@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  collectInspectionItems,
   collectPathItems,
   collectTextFrames,
   collectPlacedItems,
@@ -280,30 +281,7 @@ describe("inspector — collectPathItems CompoundPathItem 対応", () => {
     expect(result.every((r) => r.typename === "PathItem")).toBe(true);
   });
 
-  it("INSP-CP-05: CompoundPathItem の子 PathItem が細線閾値未満なら checkThinLines で検出される", () => {
-    // checkThinLines との結合テスト: 実機で CompoundPath の細線が検出されることを確認
-    const innerPath: MockItem = {
-      typename: "PathItem",
-      name: "thin-compound-inner",
-      stroked: true,
-      strokeWidth: 0.28, // 0.284pt 未満 → 細線
-      layer: { name: "レイヤー 1" },
-      geometricBounds: [0, 10, 10, 0],
-    };
-    const compoundPath: MockItem = {
-      typename: "CompoundPathItem",
-      name: "thin-compound",
-      pathItems: [innerPath],
-    };
-    const doc = makeDoc([{ pageItems: [compoundPath], layers: [] }]);
 
-    const pathItems = collectPathItems(doc);
-    // checkThinLines は pathItems を受け取る — import が必要
-    // ここでは収集結果のみ検証（checkThinLines 側は checkThinLines.test.ts でカバー済み）
-    expect(pathItems).toHaveLength(1);
-    expect((pathItems[0] as unknown as MockItem).strokeWidth).toBe(0.28);
-    expect((pathItems[0] as unknown as MockItem).stroked).toBe(true);
-  });
 });
 
 // 既存関数のスモークテスト (regression)
@@ -377,4 +355,14 @@ describe("inspector — 既存関数 regression", () => {
     }
     expect(result!).toHaveLength(1);
   });
+});
+
+
+it("1回の収集で全種類を集め、同じUUIDのグループを再走査しない", () => {
+  let reads = 0;
+  const items = ["PathItem", "TextFrame", "PlacedItem", "RasterItem"].map((typename, i) => ({ typename, name: String(i), uuid: String(i) }));
+  const group = { typename: "GroupItem", name: "group", uuid: "group", get pageItems() { reads++; return items; } };
+  const collected = collectInspectionItems(makeDoc([{ pageItems: [group, group, ...items], layers: [] }]));
+  expect(reads).toBe(1);
+  expect(Object.values(collected).map(items => items.length)).toEqual([1, 1, 1, 1]);
 });

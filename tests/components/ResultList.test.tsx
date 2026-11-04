@@ -66,42 +66,38 @@ describe("ResultList", () => {
     expect(document.querySelector('[data-severity="INFO"]')).not.toBeNull();
   });
 
-  // Test 4: クリックでアコーディオンが展開する
-  it("Test 4: グループを開いてから項目クリックでアコーディオンが展開し「問題:」「印刷への影響:」「改善ヒント:」が表示される", () => {
+  it("Test 4: グループを開くと、そのチェック種別の影響と対処が 1 回だけ表示される", () => {
+    const results = [
+      makeResult("ERROR", "err.01", { objectName: "a" }),
+      makeResult("ERROR", "err.01", { objectName: "b" }),
+    ];
+    render(
+      <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
+    );
+    expect(screen.queryByText(/影響テキスト:err\.01/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
+
+    expect(screen.getAllByText(/影響テキスト:err\.01/)).toHaveLength(1);
+    expect(screen.getAllByText(/ヒントテキスト:err\.01/)).toHaveLength(1);
+    // 見出しと重複する「問題」は繰り返さない
+    expect(screen.queryByText(/問題テキスト:err\.01/)).not.toBeInTheDocument();
+  });
+
+  it("Test 5: 項目クリックで選択状態になり、再クリックで解除される", () => {
     const results = [makeResult("ERROR", "err.01")];
     render(
       <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
     );
-    // 展開前は詳細が非表示
-    expect(screen.queryByText(/^問題:/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
-
-    // 項目をクリック
     const li = document.querySelector('[data-severity="ERROR"]') as HTMLElement;
+    expect(li).toHaveAttribute("aria-selected", "false");
     fireEvent.click(li);
-
-    expect(screen.getByText(/^問題:/)).toBeInTheDocument();
-    expect(screen.getByText(/^印刷への影響:/)).toBeInTheDocument();
-    expect(screen.getByText(/^改善ヒント:/)).toBeInTheDocument();
+    expect(li).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(li);
+    expect(li).toHaveAttribute("aria-selected", "false");
   });
 
-  // Test 5: 再クリックでアコーディオンが閉じる
-  it("Test 5: 同じ項目を再クリックするとアコーディオンが閉じる", () => {
-    const results = [makeResult("ERROR", "err.01")];
-    render(
-      <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
-    );
-    fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
-    const li = document.querySelector('[data-severity="ERROR"]') as HTMLElement;
-    fireEvent.click(li); // 開く
-    expect(screen.getByText(/^問題:/)).toBeInTheDocument();
-
-    fireEvent.click(li); // 閉じる
-    expect(screen.queryByText(/^問題:/)).not.toBeInTheDocument();
-  });
-
-  // Test 6: 排他的展開
-  it("Test 6: 別の項目をクリックすると前の展開が閉じ新しい項目が展開する", () => {
+  it("Test 6: 別の項目をクリックすると選択が移る", () => {
     const results = [
       makeResult("ERROR", "err.01"),
       makeResult("WARNING", "warn.01"),
@@ -113,19 +109,24 @@ describe("ResultList", () => {
     fireEvent.click(screen.getByRole("button", { name: /WARNING メッセージ warn\.01/ }));
 
     const [firstLi, secondLi] = document.querySelectorAll("li[data-severity]");
+    fireEvent.click(firstLi as HTMLElement);
+    fireEvent.click(secondLi as HTMLElement);
+    expect(firstLi).toHaveAttribute("aria-selected", "false");
+    expect(secondLi).toHaveAttribute("aria-selected", "true");
+  });
 
-    fireEvent.click(firstLi as HTMLElement); // 最初を展開
-    expect(screen.getAllByText(/^問題:/).length).toBe(1);
-
-    fireEvent.click(secondLi as HTMLElement); // 次を展開 → 最初が閉じる
-    // 詳細エリアは1つだけ表示される
-    expect(screen.getAllByText(/^問題:/).length).toBe(1);
-    // 2番目の messageKey に紐づく詳細が表示されること
-    expect(screen.getByText(/ヒントテキスト:warn\.01/)).toBeInTheDocument();
+  it("Test 6b: Enter キーでも項目を選択できる", () => {
+    const onSelectIndex = vi.fn();
+    render(
+      <ResultList results={[makeResult("ERROR", "err.01")]} selectedIndex={null} onSelectIndex={onSelectIndex} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
+    fireEvent.keyDown(document.querySelector('[data-severity="ERROR"]') as HTMLElement, { key: "Enter" });
+    expect(onSelectIndex).toHaveBeenLastCalledWith(0);
   });
 
   // Test 7: onSelectIndex の呼び出し
-  it("Test 7: 項目クリックで onSelectIndex が呼ばれる（展開時はインデックス、閉じる時は null）", () => {
+  it("Test 7: 項目クリックで onSelectIndex が呼ばれる（選択時はインデックス、解除時は null）", () => {
     const onSelectIndex = vi.fn();
     const results = [makeResult("ERROR", "err.01")];
     render(
@@ -134,15 +135,14 @@ describe("ResultList", () => {
     fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
     const li = document.querySelector('[data-severity="ERROR"]') as HTMLElement;
 
-    fireEvent.click(li); // 展開
+    fireEvent.click(li);
     expect(onSelectIndex).toHaveBeenLastCalledWith(0);
 
-    fireEvent.click(li); // 閉じる
+    fireEvent.click(li);
     expect(onSelectIndex).toHaveBeenLastCalledWith(null);
   });
 
-  // Test 8: selectedIndex と expandedIndex の同期
-  it("Test 8: 外部から selectedIndex が変更されるとアコーディオンが開く", () => {
+  it("Test 8: 外部から selectedIndex が変更されるとグループが開き、項目が選択状態になる", () => {
     const results = [
       makeResult("ERROR", "err.01"),
       makeResult("WARNING", "warn.01"),
@@ -150,37 +150,38 @@ describe("ResultList", () => {
     const { rerender } = render(
       <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
     );
-    expect(screen.queryByText(/^問題:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ヒントテキスト:warn\.01/)).not.toBeInTheDocument();
 
-    // 外部から selectedIndex=1 を注入
     rerender(
       <ResultList results={results} selectedIndex={1} onSelectIndex={vi.fn()} />
     );
     expect(screen.getByText(/ヒントテキスト:warn\.01/)).toBeInTheDocument();
+    expect(document.querySelector('[data-severity="WARNING"]')).toHaveAttribute("aria-selected", "true");
   });
 
-  // Test 9: objectName の表示
-  it("Test 9: objectName が存在する場合、項目にオブジェクト名が表示される", () => {
+  it("Test 9: objectName とレイヤー名が項目に表示される", () => {
     const results = [
-      makeResult("ERROR", "err.01", { objectName: "レイヤー1/rect01" }),
+      makeResult("ERROR", "err.01", { objectName: "rect01", layerName: "レイヤー1" }),
     ];
     render(
       <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
     );
     fireEvent.click(screen.getByRole("button", { name: /ERROR メッセージ err\.01/ }));
-    expect(screen.getByText(/レイヤー1\/rect01/)).toBeInTheDocument();
+    expect(screen.getByText("rect01")).toBeInTheDocument();
+    expect(screen.getByText("レイヤー1")).toBeInTheDocument();
   });
 
-  // Test 10: 小フォント・折り返し style
-  it("Test 10: 180px 幅前提のリストに wordBreak と fontSize スタイルが適用される", () => {
-    const results = [makeResult("INFO", "info.01")];
+  it("Test 10: 同じグループ内でメッセージが見出しと異なる項目は、その差分を表示する", () => {
+    const results = [
+      makeResult("ERROR", "img.01", { message: "解像度不足（150dpi）", objectName: "photo.jpg" }),
+      makeResult("ERROR", "img.01", { message: "解像度不足（200dpi）", objectName: "logo.png" }),
+    ];
     render(
       <ResultList results={results} selectedIndex={null} onSelectIndex={vi.fn()} />
     );
-    const ul = document.querySelector("ul");
-    expect(ul).not.toBeNull();
-    expect(ul!.style.wordBreak).toBe("break-word");
-    expect(ul!.style.fontSize).toBe("12px");
+    fireEvent.click(screen.getByRole("button", { name: /解像度不足（150dpi）/ }));
+    expect(screen.getByText("解像度不足（200dpi）")).toBeInTheDocument();
+    expect(screen.getByText("photo.jpg")).toBeInTheDocument();
   });
 
   it("Test 11: 表示順に 1-based の番号バッジが表示される", () => {
@@ -242,7 +243,7 @@ describe("ResultList", () => {
     );
 
     const groupHeader = screen.getByRole("button", { name: /同じ検出 1/ });
-    expect(groupHeader).toHaveTextContent("ERROR");
+    expect(groupHeader).toHaveTextContent("要修正");
     expect(groupHeader).toHaveTextContent("2");
   });
 
