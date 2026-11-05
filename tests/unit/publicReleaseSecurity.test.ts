@@ -50,4 +50,16 @@ describe("public release security boundary", () => {
     expect(security).toContain("SHA-256");
     expect(security).toContain("第三者");
   });
+
+  it("英語版 README は日本語版と同じ配布ファイル名と SHA-256 を案内する", () => {
+    const readme = fs.readFileSync(path.join(publicReleaseRoot, "README.md"), "utf8");
+    const readmeEn = fs.readFileSync(path.join(publicReleaseRoot, "README.en.md"), "utf8");
+    const pick = (text: string) => ({
+      files: [...new Set(text.match(/nyuukou-checker-v\d+\.\d+\.\d+\.zxp/g))].sort(),
+      hashes: [...new Set(text.match(/\b[a-f0-9]{64}\b/g))].sort(),
+    });
+
+    expect(pick(readmeEn)).toEqual(pick(readme));
+    expect(pick(readmeEn).hashes).toHaveLength(1);
+  });
 });
